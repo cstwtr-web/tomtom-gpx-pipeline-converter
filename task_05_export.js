@@ -1,4 +1,4 @@
-// task_05 - hash_input: e1f6a4b (Route_converter_v16, righe 1146-1215)
+// task_05 - hash_input: e1f6a4b (Route_converter_v18.0, righe 1146-1215)
 // Export puro: nessun DOM, nessun download, nessuna variabile globale.
 // Ogni funzione riceve solo dati e restituisce una stringa.
 
@@ -125,20 +125,40 @@ export function buildKMLString(wps, name, routePoints) {
 
 // ── ITN (TomTom nativo) ──────────────────────────────────────────────────────
 /**
- * Costruisce una stringa ITN (pipe-separated, TomTom MyDrive).
+ * Costruisce una stringa ITN (pipe-separated, TomTom MyDrive / Rider 550).
+ *
+ * Formato per riga: longitude|latitude|description|type|
+ *
+ * Moltiplicatore coordinate: ×1e5 (100.000), non 1e6.
+ *   Es.: lon=14.10930 → 1410930   lat=46.36830 → 4636830
+ *
+ * Tipo flag (specifica TomTom ITN):
+ *   4 = departure point (solo il primo waypoint)
+ *   0 = waypoint intermedio
+ *   2 = stopover/destination (solo l'ultimo waypoint)
+ *
+ * Encoding: Windows-1252 (ANSI). JS produce stringhe UTF-16; il server/browser
+ * deve serializzare in Windows-1252 se il dispositivo lo richiede. Per
+ * percorsi in alfabeto latino standard (Europa occidentale) UTF-8 e
+ * Windows-1252 coincidono, quindi il file è compatibile nella pratica.
  *
  * @param {Array<{lat,lon,name}>} wps
  * @returns {string}
  */
 export function buildITNString(wps) {
   return wps.map((w, i) => {
-    const lonM  = Math.round(w.lon * 1e6);
-    const latM  = Math.round(w.lat * 1e6);
-    const flag  = i === wps.length - 1 ? 4 : 0;
+    const lonM  = Math.round(w.lon * 1e5);                       // FIX: ×1e5, non 1e6
+    const latM  = Math.round(w.lat * 1e5);                       // FIX: ×1e5, non 1e6
+    const flag  = i === 0                ? 4                      // FIX: 4 = partenza (primo)
+                : i === wps.length - 1   ? 2                      // FIX: 2 = destinazione (ultimo)
+                :                          0;                     // 0 = tappa intermedia
     const wname = (w.name || `Tappa ${i + 1}`).replace(/\|/g, '-').substring(0, 32);
     return `${lonM}|${latM}|${wname}|${flag}|`;
   }).join('\n');
 }
 
-// [CHECKP_TASK_05] hash: b5c9d17
+// [CHECKP_TASK_05] hash: v18.0_b5c9d17
 // [FASE_0] 0.B: snap haversine + warning per-waypoint (nome + paese + distanza)
+// [FIX_ITN_1] buildITNString: moltiplicatore coordinate corretto 1e6→1e5 (spec TomTom ×100.000)
+// [FIX_ITN_2] buildITNString: tipo flag corretto — 4=partenza(i=0), 2=destinazione(i=last), 0=intermedio
+// [FIX_ITN_3] buildITNString: aggiunta nota encoding Windows-1252 nel JSDoc

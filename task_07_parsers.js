@@ -1,4 +1,4 @@
-// task_07 - hash_input: e9b1c4f (Route_converter_v16, righe 604-656, 656-851, 1597-1683)
+// task_07 - hash_input: e9b1c4f (Route_converter_v18.0, righe 604-656, 656-851, 1597-1683)
 // Parser file (GPX, KMZ, KML) e URL (Google Maps, Apple Maps, Waze).
 // Funzioni pure eccetto parseFile (usa Swal per alert) e addLog (iniettato).
 
@@ -375,6 +375,6 @@ export function blobCoords(s) {
 /** Testa se la URL è corta (maps.app.goo.gl, goo.gl/maps) */
 export function isShortUrl(url) { return /maps\.app\.goo\.gl|goo\.gl\/maps/i.test(url); }
 
-// [CHECKP_TASK_07] hash: c2f8e19
+// [CHECKP_TASK_07] hash: v18.0_c2f8e19
 // [FASE_0] 0.C: fallback addLog in parseGPXRobust e parseFile
 // [FASE_0] 0.E: _enrichWaypoint aggiunto, tutti i waypoints.push aggiornati

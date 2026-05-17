@@ -1,4 +1,4 @@
-// task_06 - hash_input: f8a3d5c (Route_converter_v18)
+// task_06 - hash_input: f8a3d5c (Route_converter_v18.0)
 // Orchestratore: collega tutti i moduli, gestisce il flusso principale.
 // Questo file è l'unico che tocca il DOM direttamente (tranne task_02).
 
@@ -1823,7 +1823,7 @@ function decisionEdit() {
   } catch (e) {}
 })();
 
-// [CHECKP_TASK_06] hash: v18_e4c9f27
+// [CHECKP_TASK_06] hash: v18.0_e4c9f27
 // [FASE_1] updateDashboard(): Da→A WP, km, MyDrive flag
 //   - state.setRawImportCount() in go() FASE 2 (pre setWaypoints)
 //   - updateDashboard() al termine di fullStateRefresh()
@@ -1856,12 +1856,12 @@ function decisionEdit() {
 //     · se critical > 0: SweetAlert di avviso con count
 //     · se sorgente URL (nessun rawRoutePoints): log "saltata" senza errori
 //   - showRemovalLog(): aggiornato con reasonLabel Fase 5 e badge verificato/proxy
-// v18.1 fix — mutual exclusion URL ↔ file input:
+// v18.0 fix — mutual exclusion URL ↔ file input:
 //   - Aggiunto listener 'input' su #urlIn: se l'utente incolla una URL con un
 //     file già caricato, il file input viene resettato e la UI del file azzerata.
 //   - Il listener su 'change' di #fileInput già svuotava urlIn: comportamento simmetrico.
 //   - Elimina il caso in cui go() riceveva file && urlVal → Swal "Input ambiguo".
-// v18 changes:
+// v18.0 changes:
 //   - redistributeByDistance sostituisce redistributeUniform per trkpt
 //   - nameWaypoints() estratta come funzione riutilizzabile
 //   - _consentGate() cancello a tre vie (riduci / ITN / manuale)

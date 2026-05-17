@@ -1,4 +1,4 @@
-// task_04 - hash_input: c4b8e2d (Route_converter_v18)
+// task_04 - hash_input: c4b8e2d (Route_converter_v18.0)
 // Algoritmi geometrici puri: nessun DOM, nessuna variabile globale.
 // Tutte le funzioni ricevono i parametri necessari esplicitamente.
 
@@ -343,4 +343,4 @@ export function motoOptimize(points, sourceType, wpLimit, { addLog, pinnedSet } 
 }
 
 
-// [CHECKP_TASK_04] hash: v18_a7d2e83
+// [CHECKP_TASK_04] hash: v18.0_a7d2e83

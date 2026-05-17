@@ -1,4 +1,4 @@
-// task_03 - hash_input: d2e7f3a (Route_converter_v16, righe 851-990)
+// task_03 - hash_input: d2e7f3a (Route_converter_v18.0, righe 851-990)
 // Routing engine: fetch singola (Valhalla → OSRM fallback) + chunked per N>10 waypoint.
 // Funzioni pure: nessun DOM, nessuna variabile globale.
 // decodePolyline6 è fornita dall'esterno tramite deps.
@@ -183,5 +183,5 @@ export function createRoutingEngine({ decodePolyline6, addLog, sleep }) {
   };
 }
 
-// [CHECKP_TASK_03] hash: f3a9c21
+// [CHECKP_TASK_03] hash: v18.0_f3a9c21
 // [FASE_0] 0.A: polyfill AbortSignal.any aggiunto

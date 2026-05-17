@@ -1,4 +1,4 @@
-// task_01 - hash_input: a3f5c8e (Route_converter_v16, righe 553-571)
+// task_01 - hash_input: a3f5c8e (Route_converter_v18.0, righe 553-571)
 // Gestione stato centrale con event emitter.
 // Nessuna variabile globale: tutto è incapsulato in createState().
 // Signature stabile: i nomi dei metodi non cambieranno mai.
@@ -172,7 +172,7 @@ export function createState() {
   };
 }
 
-// [CHECKP_TASK_01] hash: c7d3a91
+// [CHECKP_TASK_01] hash: v18.0_c7d3a91
 // [FASE_0] 0.D: validazione entry in pushHistory (waypoints array + limite 200)
 // [FASE_1] getRawImportCount / setRawImportCount per dashboard persistente
 // [FASE_2] deepClone + _snapshots/_snapIdx + pushSnapshot/undo/redo/canUndo/canRedo/getSnapshotLabel

@@ -1,4 +1,4 @@
-// task_02 - hash_input: b9c4d1f (Route_converter_v16, righe 1210-1590)
+// task_02 - hash_input: b9c4d1f (Route_converter_v18.0, righe 1210-1590)
 // Render lista waypoint interattiva: drag, edit inline, add, delete.
 // Nessuna variabile globale: riceve state + callbacks come parametri.
 // DOM dependency: elementi con id wpList, wpLabel, statusMessage, addWaypointPanel, newWpAddress
@@ -272,5 +272,5 @@ export function createWaypointUI({ state, geocode, fullStateRefresh, regenerateO
   };
 }
 
-// [CHECKP_TASK_02] hash: e8f1b42
+// [CHECKP_TASK_02] hash: v18.0_e8f1b42
 // [FASE_2] pushSnapshot() in: drop (riordino), doConfirm (rinomina), deleteWaypoint, addByAddress, addByCoords
