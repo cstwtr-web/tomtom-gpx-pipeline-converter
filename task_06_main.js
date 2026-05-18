@@ -261,7 +261,27 @@ function initMap() {
     // Traccia l'elemento DOM del marker per escluderlo dal long-press su sfondo
     marker.on('add', () => {
       const el = marker.getElement();
-      if (el) _markerEls.add(el);
+      if (el) {
+        _markerEls.add(el);
+        // FIX mobile long-press: blocca il menu contestuale nativo del browser.
+        // Su Chrome/Safari mobile, un long-press su <img> (il marker Leaflet è un <img>)
+        // apre "Salva immagine / Condividi" prima che scatti il nostro timer a 500ms.
+        // Tre layer di difesa sovrapposti:
+        //   1. touch-action: none        → impedisce al browser di gestire pan/pinch
+        //                                  sull'elemento; prerequisito per preventDefault
+        //   2. -webkit-touch-callout     → disabilita il callout iOS (anteprima link/img)
+        //   3. user-select: none         → blocca la selezione testo/immagine al tocco
+        el.style.touchAction        = 'none';
+        el.style.webkitTouchCallout = 'none';
+        el.style.userSelect         = 'none';
+        el.style.webkitUserSelect   = 'none';
+        // Listener nativo { passive: false } necessario per poter chiamare
+        // preventDefault() e bloccare il contextmenu *prima* che il browser
+        // lo mostri. Leaflet lega touchstart con passive:true su molte versioni,
+        // per cui il nostro ev.preventDefault() via Leaflet arriva troppo tardi.
+        el.addEventListener('touchstart',  (e) => e.preventDefault(), { passive: false });
+        el.addEventListener('contextmenu', (e) => e.preventDefault());
+      }
     });
     marker.on('remove', () => {
       const el = marker.getElement();
@@ -269,7 +289,7 @@ function initMap() {
     });
 
     // ── Long-press su marker → rimozione tappa ────────────────────────────
-    // Usa pointerdown/pointerup sull'elemento DOM del marker.
+    // mousedown gestisce desktop; touchstart gestisce mobile.
     // Non interferisce con il click normale (che apre il popup).
     let _mLpTimer = null;
     const LP_MARKER_MS = 500;
@@ -278,6 +298,9 @@ function initMap() {
       // touchstart non ha ev.originalEvent.button
       const oe = ev.originalEvent;
       if (oe.button !== undefined && oe.button !== 0) return;
+      // Secondo layer: chiama preventDefault anche tramite Leaflet per i browser
+      // che non hanno ancora ricevuto il listener nativo sull'elemento (es. primo render).
+      if (oe.type === 'touchstart') oe.preventDefault();
       _mLpTimer = setTimeout(async () => {
         _mLpTimer = null;
         // Chiudi eventuale popup aperto
@@ -2000,7 +2023,24 @@ function decisionEdit() {
 //   - decisionExport() ora controlla il flag invece di querySelector('.fmt-btn.active')
 //     eliminando il falso negativo quando lo stato è aggiornato ma la classe .active
 //     non è ancora sincronizzata (o la sessione è stata ricaricata).
-// [CHECKP_TASK_06] hash: v18.0_e4c9f27
+// [CHECKP_TASK_06] hash: v18.1_mobile_longpress_fix
+// [FIX mobile long-press marker] — v18.1
+//   Problema: long-press su marker Leaflet su Chrome/Safari mobile mostrava il menu
+//   contestuale nativo del browser ("Salva immagine") invece di avviare la rimozione tappa.
+//   Causa: il marker Leaflet è un <img>; il browser intercettava il touchstart con il suo
+//   gestore nativo prima che scattasse il timer a 500ms. Leaflet lega touchstart con
+//   passive:true su molte versioni, impedendo a ev.preventDefault() (via Leaflet) di agire.
+//   Fix applicato in marker.on('add', ...):
+//     - el.style.touchAction = 'none'           → disabilita pan/pinch browser sull'elemento
+//     - el.style.webkitTouchCallout = 'none'    → disabilita callout iOS (anteprima img)
+//     - el.style.userSelect / webkitUserSelect  → blocca selezione al tocco
+//     - el.addEventListener('touchstart', preventDefault, { passive: false })
+//         → listener nativo registrato direttamente sull'elemento DOM; passive:false
+//           permette preventDefault() prima che il browser mostri il contextmenu
+//     - el.addEventListener('contextmenu', preventDefault)
+//         → fallback per long-press su desktop o Android WebView
+//   Fix secondario in marker.on('mousedown touchstart', ...):
+//     - oe.preventDefault() chiamato via Leaflet per touchstart (secondo layer di difesa)
 // [FASE_1] updateDashboard(): Da→A WP, km, MyDrive flag
 //   - state.setRawImportCount() in go() FASE 2 (pre setWaypoints)
 //   - updateDashboard() al termine di fullStateRefresh()
