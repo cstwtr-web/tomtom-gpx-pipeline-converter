@@ -611,21 +611,26 @@ outline: none;
 
 /* ── Accordion lista tappe su mobile ── */
 @media (max-width: 1023px) {
-  #wpList-accordion-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    cursor: pointer;
-    padding: 8px 4px;
-    user-select: none;
+  /* wpLabel e accordion-header affiancati sulla stessa riga */
+  #wpLabel {
+    display: inline;
   }
-  #wpList-accordion-header .acc-arrow {
+  #wpList-accordion-header {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 0 4px;
+    user-select: none;
+    vertical-align: middle;
+  }
+  #wpList-acc-arrow {
     font-size: 10px;
     transition: transform .22s ease;
     display: inline-block;
     opacity: .6;
+    margin-left: 4px;
   }
-  #wpList-accordion-header.open .acc-arrow {
+  #wpList-accordion-header.open #wpList-acc-arrow {
     transform: rotate(180deg);
   }
   #wpList-wrap {
@@ -887,11 +892,9 @@ outline: none;
   </div>
 
 </div>
-<div class="sec-label" id="wpLabel">
-  <div id="wpList-accordion-header" onclick="toggleWpListAccordion()" aria-expanded="false">
-    <span id="wpLabel-text">Tappe</span>
-    <span class="acc-arrow">▼</span>
-  </div>
+<div class="sec-label" id="wpLabel"></div>
+<div id="wpList-accordion-header" onclick="toggleWpListAccordion()" aria-expanded="false">
+  <span id="wpList-acc-arrow" class="acc-arrow">▼</span>
 </div>
 <div id="wpList-wrap">
 <div class="wp-list modifiable" id="wpList"></div>
