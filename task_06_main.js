@@ -687,6 +687,7 @@ function toggleMapClickMode(forceOff = false) {
   const label   = $('map-edit-label');
   const banner  = $('map-edit-banner');
   const ctrl    = $('map-edit-ctrl');
+  const hint    = $('map-edit-hint');
 
   if (mapEl) mapEl.classList.toggle('crosshair-mode', _mapClickModeActive);
 
@@ -696,6 +697,7 @@ function toggleMapClickMode(forceOff = false) {
     if (icon)   icon.textContent = '✕';
     if (label)  label.textContent = 'Esci';
     if (banner) banner.style.display = 'block';
+    if (hint)   hint.style.display   = 'none';
     if (ctrl)   ctrl.style.flexDirection = 'column';
 
     // ESC per uscire — registrato una sola volta e rimosso all'uscita
@@ -714,6 +716,7 @@ function toggleMapClickMode(forceOff = false) {
     if (icon)   icon.textContent = '✏️';
     if (label)  label.textContent = 'Modifica';
     if (banner) banner.style.display = 'none';
+    if (hint)   hint.style.display   = 'block';
 
     // Rimuovi handler ESC
     if (toggleMapClickMode._escHandler) {
