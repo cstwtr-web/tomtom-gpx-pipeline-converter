@@ -179,7 +179,7 @@ input::placeholder { color: var(--text-muted); font-size: .85em; }
 #statusMessage.status-red { background: var(--error-bg); border: 1.5px solid var(--error-bd); color: #991b1b; }
 #statusMessage.status-red .sm-body strong { color: #b91c1c; }
 
-#mapPreview { width: 100%; height: clamp(220px, 40dvh, 380px); border-radius: var(--radius); margin-bottom: 16px; border: 1px solid var(--border-light); box-shadow: var(--shadow); display: none; position: relative; }
+#mapPreview { width: 100%; height: clamp(260px, 62dvh, 520px); border-radius: var(--radius); margin-bottom: 16px; border: 1px solid var(--border-light); box-shadow: var(--shadow); display: none; position: relative; }
 #mapPreview.on { display: block; }
 #results { display: none; }
 #results.on { display: block; }
@@ -239,6 +239,7 @@ background: #222; color: #fff; padding: 4px 8px; border-radius: 6px;
 font-size: 10px; font-weight: 400; white-space: nowrap; opacity: 0;
 transform: translateY(-4px); transition: all .15s; pointer-events: none; z-index: 10;
 }
+
 .wp-row.intermediate:hover .wp-name::after { opacity: 1; transform: translateY(0); }
 .wp-coords { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
 .wp-delete-btn {
@@ -349,7 +350,7 @@ outline: none;
 
   /* Mappa alta su desktop */
   #mapPreview {
-    height: calc(100dvh - 148px);
+    height: calc(100dvh - 100px);
     min-height: 320px;
   }
 
@@ -608,7 +609,40 @@ outline: none;
   background: transparent;
 }
 
-/* ── FIX 6 — TAPPE accordion su mobile ── */
+/* ── Accordion lista tappe su mobile ── */
+@media (max-width: 1023px) {
+  #wpList-accordion-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    padding: 8px 4px;
+    user-select: none;
+  }
+  #wpList-accordion-header .acc-arrow {
+    font-size: 10px;
+    transition: transform .22s ease;
+    display: inline-block;
+    opacity: .6;
+  }
+  #wpList-accordion-header.open .acc-arrow {
+    transform: rotate(180deg);
+  }
+  #wpList-wrap {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height .35s cubic-bezier(0.4,0,0.2,1);
+  }
+  #wpList-wrap.open {
+    max-height: 600px;
+  }
+}
+@media (min-width: 1024px) {
+  /* Su desktop: header accordion invisibile, lista sempre visibile */
+  #wpList-accordion-header { display: none; }
+  #wpList-wrap { max-height: none !important; overflow: visible; }
+}
+
 @media (max-width: 1023px) {
   #dp-btn-optimize-ctrl.collapsed #dp-wp-minus,
   #dp-btn-optimize-ctrl.collapsed #dp-wp-count,
@@ -853,7 +887,13 @@ outline: none;
   </div>
 
 </div>
-<div class="sec-label" id="wpLabel">Tappe</div>
+<div class="sec-label" id="wpLabel">
+  <div id="wpList-accordion-header" onclick="toggleWpListAccordion()" aria-expanded="false">
+    <span id="wpLabel-text">Tappe</span>
+    <span class="acc-arrow">▼</span>
+  </div>
+</div>
+<div id="wpList-wrap">
 <div class="wp-list modifiable" id="wpList"></div>
 <button class="btn-add-waypoint" onclick="toggleAddWaypointPanel()">➕ Aggiungi tappa intermedia</button>
 <div id="addWaypointPanel" class="add-waypoint-panel">
@@ -862,6 +902,7 @@ outline: none;
 <button onclick="addWaypointByAddress()" style="background:var(--p);color:#fff;border:none;">📍 Geocodifica</button>
 <button onclick="addWaypointByCoords()" style="background:var(--success);color:#fff;border:none;">📌 Coordinate</button>
 <button onclick="toggleAddWaypointPanel()" style="background:var(--border-light);color:var(--text-main);border:none;">Annulla</button>
+</div>
 </div>
 </div>
 <div id="statusMessage"><span class="sm-icon"></span><div class="sm-body"><strong></strong><span class="sm-detail"></span></div></div>
@@ -920,6 +961,36 @@ outline: none;
         sessionStorage.setItem('tappe-panel-open',
           String(!ctrl.classList.contains('collapsed')));
       });
+    }
+  });
+})();
+
+/* Accordion lista tappe su mobile */
+function toggleWpListAccordion() {
+  if (window.innerWidth >= 1024) return; // desktop: sempre aperto
+  var wrap = document.getElementById('wpList-wrap');
+  var header = document.getElementById('wpList-accordion-header');
+  if (!wrap || !header) return;
+  var isOpen = wrap.classList.contains('open');
+  wrap.classList.toggle('open', !isOpen);
+  header.classList.toggle('open', !isOpen);
+  header.setAttribute('aria-expanded', String(!isOpen));
+  sessionStorage.setItem('wplist-open', String(!isOpen));
+}
+
+/* Inizializza accordion lista tappe al caricamento */
+(function() {
+  document.addEventListener('DOMContentLoaded', function() {
+    if (window.innerWidth >= 1024) return;
+    var wrap = document.getElementById('wpList-wrap');
+    var header = document.getElementById('wpList-accordion-header');
+    if (!wrap || !header) return;
+    // Parte chiuso di default su mobile
+    var wasOpen = sessionStorage.getItem('wplist-open') === 'true';
+    if (wasOpen) {
+      wrap.classList.add('open');
+      header.classList.add('open');
+      header.setAttribute('aria-expanded', 'true');
     }
   });
 })();
