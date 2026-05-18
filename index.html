@@ -546,8 +546,8 @@ outline: none;
   -webkit-user-drag: none !important;      /* blocca drag nativo immagine      */
 }
 
-/* ── FIX 1 — Banner auto-dismiss: sparisce dopo 4s dall'attivazione ── */
-#map-edit-banner {
+/* ── FIX 1 — Banner auto-dismiss: animazione SOLO quando attivo (.auto-hide) ── */
+#map-edit-banner.auto-hide {
   animation: banner-autohide 4s forwards;
 }
 @keyframes banner-autohide {
@@ -876,27 +876,24 @@ outline: none;
 
 <!-- ── FIX 1 + FIX 6: banner reset + accordion TAPPE ── -->
 <script>
-/* FIX 1 — Reset animazione banner ad ogni apertura modalità editing.
-   Il CSS `animation: banner-autohide 4s` parte al render iniziale;
-   per farlo ripartire ogni volta che il banner viene re-mostrato,
-   rimuoviamo e riapplichiamo la classe/animation via JS.
-   Lo facciamo con un MutationObserver sul display del banner. */
+/* FIX 1 — Aggiunge la classe .auto-hide ogni volta che il banner viene mostrato,
+   così l'animazione di 4s parte sempre da zero ad ogni apertura della modalità
+   editing, e non influenza affatto l'elemento quando è display:none. */
 (function() {
-  function resetBannerAnimation(banner) {
-    banner.style.animation = 'none';
-    // Forza reflow per riavviare l'animazione
-    void banner.offsetWidth;
-    banner.style.animation = '';
-  }
   document.addEventListener('DOMContentLoaded', function() {
     var banner = document.getElementById('map-edit-banner');
     if (!banner) return;
-    // Observer: ogni volta che il banner torna display:block, resetta l'animazione
     var obs = new MutationObserver(function(mutations) {
       mutations.forEach(function(m) {
         if (m.type === 'attributes' && m.attributeName === 'style') {
-          if (banner.style.display !== 'none' && banner.style.display !== '') {
-            resetBannerAnimation(banner);
+          var visible = banner.style.display && banner.style.display !== 'none';
+          if (visible) {
+            // Rimuovi e riaggiunge la classe per resettare l'animazione CSS
+            banner.classList.remove('auto-hide');
+            void banner.offsetWidth; // forza reflow
+            banner.classList.add('auto-hide');
+          } else {
+            banner.classList.remove('auto-hide');
           }
         }
       });
