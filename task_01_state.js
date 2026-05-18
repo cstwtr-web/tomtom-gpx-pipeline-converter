@@ -16,7 +16,7 @@ export function createState() {
   let output         = '';          // stringa GPX/ITN/KMZ corrente
   let name           = 'La mia rotta';
   let format         = 'gpx';       // 'gpx' | 'itn' | 'kmz'
-  let wpLimit        = 21;          // max waypoint per il modello TomTom
+  let wpLimit        = 20;          // max waypoint per il modello TomTom (App MyDrive EU = 20, USB/SD = 255)
   let rawTrkPoints   = null;        // raw trkpt per debug/export
   let rawRoutePoints = null;        // route points pre-pruning (per rilevamento inversioni)
   let gpxSourceType  = 'url';       // 'url' | 'garmin' | 'track' | ...

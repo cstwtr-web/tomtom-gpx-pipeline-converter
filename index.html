@@ -149,6 +149,15 @@ input::placeholder { color: var(--text-muted); font-size: .85em; }
 .prog-track { background: var(--p-light); border-radius: 100px; height: 6px; margin-bottom: 13px; overflow: hidden; }
 .prog-bar { height: 100%; background: var(--p); border-radius: 100px; width: 0%; transition: width .4s ease; }
 .log { max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; background: var(--input-bg); border: 1px solid var(--border-light); border-radius: 10px; padding: 10px; margin-top: 10px; }
+
+/* ── Log collassabile su mobile ── */
+@media (max-width: 768px) {
+  #progressCard .log { display: none; }
+  #progressCard.log-open .log { display: flex; max-height: 110px; }
+  .prog-title { cursor: pointer; display: flex; align-items: center; justify-content: space-between; }
+  .prog-title::after { content: '▶'; font-size: 9px; opacity: .5; margin-left: 6px; transition: transform .2s; }
+  #progressCard.log-open .prog-title::after { content: '▼'; }
+}
 .log-row { font-size: 11.5px; line-height: 1.65; display: flex; align-items: flex-start; gap: 6px; color: var(--text-sec); }
 .log-row .d { flex-shrink: 0; margin-top: 3px; }
 .l-ok .d { color: var(--success); }
@@ -170,7 +179,7 @@ input::placeholder { color: var(--text-muted); font-size: .85em; }
 #statusMessage.status-red { background: var(--error-bg); border: 1.5px solid var(--error-bd); color: #991b1b; }
 #statusMessage.status-red .sm-body strong { color: #b91c1c; }
 
-#mapPreview { width: 100%; height: 250px; border-radius: var(--radius); margin-bottom: 16px; border: 1px solid var(--border-light); box-shadow: var(--shadow); display: none; }
+#mapPreview { width: 100%; height: 250px; border-radius: var(--radius); margin-bottom: 16px; border: 1px solid var(--border-light); box-shadow: var(--shadow); display: none; position: relative; }
 #mapPreview.on { display: block; }
 #results { display: none; }
 #results.on { display: block; }
@@ -370,11 +379,11 @@ outline: none;
 #decision-panel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 7px;
   background: #fff;
   border: 1.5px solid var(--border);
-  border-radius: 16px;
-  padding: 16px;
+  border-radius: 14px;
+  padding: 10px 10px 8px;
   margin-bottom: 14px;
   box-shadow: var(--shadow);
   opacity: 0.35;
@@ -384,21 +393,37 @@ outline: none;
 #decision-panel.on { opacity: 1; pointer-events: auto; }
 #decision-panel .dp-buttons {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
-  gap: 8px;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
 }
 @media (max-width: 500px) {
   #decision-panel .dp-buttons { grid-template-columns: 1fr; }
 }
+/* Bottone base: altezza minima funzionale 32px (mouse), leggibile 11-12px */
 .dp-btn {
-  padding: 7px 8px; border: 1.5px solid var(--border-light);
-  border-radius: 12px; font-family: inherit; font-size: clamp(11px,2vw,12.5px);
-  font-weight: 700; cursor: pointer; text-align: center;
+  padding: 4px 8px;
+  min-height: 32px;
+  border: 1.5px solid var(--border-light);
+  border-radius: 9px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
   transition: transform .12s, box-shadow .15s, background .15s;
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  line-height: 1.3;
+  display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 6px;
+  line-height: 1.15; width: 100%;
+  white-space: nowrap;
 }
 .dp-btn:active { transform: scale(.97); }
+/* Etichetta secondaria inline, separata da slash */
+.dp-btn .dp-btn-label {
+  font-size: 10px; font-weight: 400; color: inherit; opacity: .7;
+  white-space: nowrap;
+}
+/* Separatore visivo tra label principale e sub */
+.dp-btn .dp-btn-sep { opacity: .4; font-weight: 300; font-size: 10px; }
+
 .dp-btn-export {
   background: var(--success-bg); border-color: var(--success-bd); color: #065f46;
 }
@@ -407,18 +432,58 @@ outline: none;
   background: var(--warning-bg); border-color: var(--warning-bd); color: #78350f;
 }
 .dp-btn-optimize:hover { background: var(--warning); color: #fff; border-color: var(--warning); }
+
+/* Controllo TAPPE: riga orizzontale compatta */
 #dp-btn-optimize-ctrl {
   background: var(--warning-bg);
   border-color: var(--warning-bd);
   color: #78350f;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  padding: 7px 8px;
+  gap: 4px;
+  padding: 4px 6px;
+  min-height: 32px;
 }
 #dp-btn-optimize-ctrl button { font-family: inherit; }
+
+/* Pulsantini − e + ancora più piccoli ma con area di click generosa */
+.dp-wp-stepper {
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  border: 1.5px solid var(--warning-bd);
+  background: var(--warning-bg);
+  color: #78350f;
+  font-size: 15px; font-weight: 700;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  line-height: 1;
+  transition: background .12s;
+  padding: 0;
+}
+.dp-wp-stepper:hover { background: var(--warning); color: #fff; border-color: var(--warning); }
+
+#dp-wp-count {
+  min-width: 24px; text-align: center;
+  font-size: 13px; font-weight: 700; color: #78350f;
+}
+#dp-wp-label-text {
+  font-size: 11px; font-weight: 700; color: #78350f; line-height: 1;
+}
+#dp-wp-hint {
+  font-size: 9.5px; font-weight: 400; opacity: .7; color: #78350f;
+}
+#dp-wp-apply {
+  display: none;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1.5px solid var(--warning-bd);
+  background: var(--warning);
+  color: #fff; font-size: 10px; font-weight: 700;
+  cursor: pointer; font-family: inherit;
+}
+
 .dp-btn-edit {
   background: var(--p-light); border-color: var(--border-light); color: var(--p);
 }
@@ -426,28 +491,36 @@ outline: none;
 .dp-btn-mapclick { background: #e8f0fb; border-color: #1e5aa8; color: #1e5aa8; }
 .dp-btn-mapclick:hover { background: #1e5aa8; color: #fff; border-color: #1e5aa8; }
 .dp-btn-mapclick.active { background: #1e5aa8; color: #fff; outline: 3px solid #f59e0b; }
-.dp-btn .dp-btn-label { font-size: clamp(10px,1.8vw,11.5px); font-weight: 400; color: inherit; opacity: .8; margin-top: 1px; }
-/* ── Fase 4: toggle overlay + log row nel pannello decisionale ── */
-#dp-overlay-toggle-row, #dp-log-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: clamp(11.5px, 2vw, 13px);
+
+/* ── Riga spunta "Confronta" — dentro il pannello decisionale ── */
+#dp-overlay-toggle-row {
+  font-size: 11px;
   color: var(--text-sec);
-  padding: 6px 2px 0;
+  padding: 2px 2px 0;
   border-top: 1px solid var(--border-light);
-  margin-top: 2px;
+  margin-top: 1px;
+  display: none;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
+#dp-overlay-toggle-row.visible { display: flex; }
 #dp-overlay-toggle-row label {
-  display: flex; align-items: center; gap: 7px; cursor: pointer; user-select: none;
+  display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;
 }
 #dp-overlay-toggle-row input[type="checkbox"] {
-  width: 15px; height: 15px; cursor: pointer; accent-color: var(--p);
+  width: 13px; height: 13px; cursor: pointer; accent-color: var(--p); flex-shrink: 0;
+}
+/* Log row — dentro il pannello decisionale, inline con la spunta */
+#dp-log-row {
+  font-size: 11px;
+  color: var(--text-sec);
 }
 .dp-log-btn {
   background: none; border: 1.5px solid var(--border-light);
-  border-radius: 8px; padding: 4px 10px;
-  font-family: inherit; font-size: 11.5px; color: var(--p);
+  border-radius: 7px; padding: 3px 9px;
+  font-family: inherit; font-size: 10.5px; color: var(--p);
   cursor: pointer; transition: background .15s;
 }
 .dp-log-btn:hover { background: var(--p-light); }
@@ -472,7 +545,7 @@ outline: none;
 </button>
 <div class="info-panel" id="infoPanel" role="region" aria-labelledby="infoToggleBtn">
   <div class="info">
-    ⚠️ <b>IMPORTANTE:</b> TomTom MyDrive Connect accetta massimo <b>21 waypoint</b>. Caricando via microSD/USB (ITN) il limite sale a <b>255 waypoint</b>. Il tool si adatta automaticamente alla modalità selezionata.
+    ⚠️ <b>IMPORTANTE:</b> Non usare MyDrive Connect o Tyre. Tramite <b>App TomTom MyDrive EU</b> il limite è <b>max 20 waypoint</b>. Caricando via <b>microSD o USB</b> il TomTom accetta fino a <b>255 waypoint</b>. Il tool si adatta automaticamente alla modalità selezionata.
     <br>📌 <b>Editor GIS Reattivo:</b> modifica tappe, trascina, rinomina, aggiungi punti: la mappa e il file si aggiornano in tempo reale.
     <br>🔧 <b>v15.0: FIX INVERSIONI DI ROTTA</b> — 3 fix: (1) <b>pruneBacktracks</b>: rimuove dalla geometria OSRM i tratti che invertono la direzione globale (bearing diff &gt;120°), con protezione per tornanti. (2) <b>Snap monotono</b>: i waypoint si snappano sulla geometria in ordine crescente, impossibile tornare indietro. (3) <b>Distribuzione spaziale ponderata per curvatura</b>: sostituisce la selezione angolare, garantisce copertura dell'intero percorso senza cluster.
     <br>🔧 <b>v16.0: Pannello decisionale</b> — regola il numero di tappe con i tasti <b>+</b> / <b>−</b> e conferma con <b>Applica</b>. La mappa si aggiorna in tempo reale.
@@ -481,16 +554,18 @@ outline: none;
   </div>
 </div>
 <details class="accordion-card">
-<summary>📖 Come importare nel navigatore / Google Earth</summary>
+<summary>📖 Convertitore (.ITN) per TomTom</summary>
 <div class="howto">
-<div class="howto-title"><span>✅</span> Importazione GPX (TomTom)</div>
-<div class="howto-step"><div class="step-n">1</div><div>Apri <b style="color:var(--p)">mydrive.tomtom.com</b> da browser</div></div>
-<div class="howto-step"><div class="step-n">2</div><div>Menu → <b>Importa rotta</b> → seleziona il file <b>.gpx</b></div></div>
-<div class="howto-step"><div class="step-n">3</div><div>TomTom riconosce <code style="color:var(--success)">&lt;rte&gt;</code> come itinerario guidato ✓</div></div>
+<div class="howto-title"><span>⚠️</span> Note importanti</div>
+<div class="howto-step"><div class="step-n">•</div><div><b>NO</b> MyDrive Connect o Tyre</div></div>
+<div class="howto-step"><div class="step-n">•</div><div>Via <b>App TomTom MyDrive EU</b> accetta max <b>20 waypoint</b></div></div>
+<div class="howto-step"><div class="step-n">•</div><div>Via <b>MicroSD</b> o <b>USB</b> TomTom accetta max <b>255 waypoint</b></div></div>
 <div style="margin-top:16px; border-top:1px solid var(--border-light); padding-top:12px;">
-<div class="howto-title"><span>🌍</span> Importazione KMZ (Google Earth)</div>
-<div class="howto-step"><div class="step-n">1</div><div>Apri <b style="color:var(--p)">Google Earth</b> (PC o Mobile)</div></div>
-<div class="howto-step"><div class="step-n">2</div><div><b>File → Importa</b> o trascina il <b>.kmz</b></div></div>
+<div class="howto-title"><span>▶</span> Come operare</div>
+<div class="howto-step"><div class="step-n">1</div><div>Crea / ottieni il tuo percorso in <b>Google Maps</b> o in formato <b>GPX</b></div></div>
+<div class="howto-step"><div class="step-n">2</div><div>Incolla il tuo percorso nel <b>campo apposito</b></div></div>
+<div class="howto-step"><div class="step-n">3</div><div><b>Elabora</b> il percorso</div></div>
+<div class="howto-step"><div class="step-n">4</div><div><b>Esporta</b> il percorso nel formato che desideri</div></div>
 </div>
 </div>
 </details>
@@ -510,8 +585,8 @@ outline: none;
 <div class="field">
 <label class="label">2. METODO DI CARICAMENTO SUL NAVIGATORE</label>
 <select id="modelSelect" onchange="updateModelLimit()">
-<option value="21" selected>TomTom MyDrive Connect (wireless) → max 21 tappe</option>
-<option value="255">Navigatore via microSD / USB (ITN) → max 255 tappe</option>
+<option value="20" selected>App TomTom MyDrive EU → max 20 tappe</option>
+<option value="255">Navigatore microSD / USB → max 255 tappe</option>
 </select>
 </div>
 <div class="field">
@@ -548,7 +623,7 @@ outline: none;
 <div class="field">
 <label class="label">SELEZIONA FORMATO DI OUTPUT</label>
 <div class="fmt-toggle">
-<button class="fmt-btn active" data-fmt="gpx"><span>📦</span> GPX (TomTom)</button>
+<button class="fmt-btn" data-fmt="gpx"><span>📦</span> GPX (TomTom)</button>
 <button class="fmt-btn" data-fmt="itn"><span>🗺️</span> ITN (TomTom nativo)</button>
 <button class="fmt-btn" data-fmt="kmz"><span>🌍</span> KMZ (Earth)</button>
 </div>
@@ -584,60 +659,34 @@ outline: none;
 <!-- ── Pannello decisionale (Fase 3 + Fase 4) ── -->
 <div id="decision-panel">
   <div class="dp-buttons">
+
+    <!-- ESPORTA -->
     <button class="dp-btn dp-btn-export" onclick="decisionExport()">
-      ESPORTA
-      <span class="dp-btn-label">mantieni così</span>
+      ESPORTA <span class="dp-btn-sep">/</span><span class="dp-btn-label">mantieni così</span>
     </button>
+
+    <!-- TAPPE: riga orizzontale compatta -->
     <div class="dp-btn dp-btn-optimize" id="dp-btn-optimize-ctrl">
-      <span style="font-size:clamp(11px,2vw,12.5px);font-weight:700;line-height:1.3;">TAPPE</span>
-      <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
-        <button id="dp-wp-minus" onclick="decisionWpAdjust(-1)"
-          style="width:28px;height:28px;border-radius:8px;border:1.5px solid var(--warning-bd);
-                 background:var(--warning-bg);color:#78350f;font-size:16px;font-weight:700;
-                 cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">
-          −
-        </button>
-        <span id="dp-wp-count"
-          style="min-width:28px;text-align:center;font-size:clamp(13px,2.5vw,15px);
-                 font-weight:700;color:#78350f;">
-          —
-        </span>
-        <button id="dp-wp-plus" onclick="decisionWpAdjust(+1)"
-          style="width:28px;height:28px;border-radius:8px;border:1.5px solid var(--warning-bd);
-                 background:var(--warning-bg);color:#78350f;font-size:16px;font-weight:700;
-                 cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">
-          +
-        </button>
-      </div>
-      <button id="dp-wp-apply" onclick="decisionWpApply()"
-        style="display:none;margin-top:4px;padding:3px 10px;border-radius:8px;
-               border:1.5px solid var(--warning-bd);background:var(--warning);
-               color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">
-        Applica
-      </button>
-      <span class="dp-btn-label" id="dp-wp-hint">modifica tappe</span>
+      <span id="dp-wp-label-text">TAPPE</span>
+      <button id="dp-wp-minus" class="dp-wp-stepper" onclick="decisionWpAdjust(-1)">−</button>
+      <span id="dp-wp-count">—</span>
+      <button id="dp-wp-plus" class="dp-wp-stepper" onclick="decisionWpAdjust(+1)">+</button>
+      <button id="dp-wp-apply" onclick="decisionWpApply()">Applica</button>
+      <span id="dp-wp-hint">mod. tappe</span>
     </div>
+
+    <!-- MODIFICA -->
     <button class="dp-btn dp-btn-edit" onclick="decisionEdit()">
-      MODIFICA
-      <span class="dp-btn-label">editing manuale</span>
+      MODIFICA <span class="dp-btn-sep">/</span><span class="dp-btn-label">editing manuale</span>
     </button>
-    <button class="dp-btn dp-btn-mapclick" id="mapClickBtn" onclick="toggleMapClickMode()">
-      AGGIUNGI
-      <span class="dp-btn-label">clicca sulla mappa</span>
-    </button>
+
   </div>
-  <!-- [Fase 4] Toggle overlay traccia originale — nascosto finché non c'è rawRoutePoints -->
-  <div id="dp-overlay-toggle-row" style="display:none;">
-    <label>
-      <input type="checkbox" id="dp-overlay-chk" onchange="toggleOriginalLayer(this.checked)"/>
-      Confronta con traccia originale
-    </label>
-  </div>
-  <!-- [Fase 4] Link log semantico rimozioni — nascosto finché non c'è un'ottimizzazione -->
-  <div id="dp-log-row" style="display:none;">
+
+  <!-- Log rimozioni dentro il pannello (la spunta è spostata in overlay sulla mappa) -->
+  <div id="dp-overlay-toggle-row">
     <button class="dp-log-btn" onclick="showRemovalLog()">📋 Log rimozioni</button>
-    <span style="font-size:11px;color:var(--text-muted);">classificazione geometrica + routing verificato</span>
   </div>
+
 </div>
 <div id="mapPlaceholder">
   <div class="ph-icon">🗺️</div>
@@ -647,7 +696,20 @@ outline: none;
 </div>
 <div id="results">
 
-<div id="mapPreview"></div>
+<div id="mapPreview">
+  <div id="map-longpress-hint" style="display:none; position:absolute; top:8px; left:50%; transform:translateX(-50%); z-index:1000; background:rgba(0,0,0,0.55); color:#fff; border-radius:20px; padding:5px 14px; font-size:11.5px; font-family:inherit; white-space:nowrap; pointer-events:none; backdrop-filter:blur(3px);">
+    🔵 Premi a lungo sulla tappa per eliminarla &nbsp;·&nbsp; 🗺️ Premi sulla mappa per aggiungere una tappa
+  </div>
+
+  <!-- Overlay confronta traccia originale — angolo basso destra della mappa -->
+  <div id="map-confronta-overlay" style="display:none; position:absolute; bottom:28px; right:10px; z-index:1000; background:rgba(255,255,255,0.90); backdrop-filter:blur(4px); border-radius:16px; padding:5px 13px; font-size:11.5px; font-family:inherit; box-shadow:0 2px 8px rgba(0,0,0,0.18); border:1px solid rgba(30,90,168,0.18); transition:opacity .25s;">
+    <label style="display:flex; align-items:center; gap:7px; cursor:pointer; user-select:none; color:#1e3a5f; font-weight:500; white-space:nowrap;">
+      <input type="checkbox" id="dp-overlay-chk" onchange="toggleOriginalLayer(this.checked)" style="width:13px; height:13px; cursor:pointer; accent-color:#1e5aa8; flex-shrink:0;"/>
+      👁 Confronta traccia originale
+    </label>
+  </div>
+
+</div>
 <div class="sec-label" id="wpLabel">Tappe</div>
 <div class="wp-list modifiable" id="wpList"></div>
 <button class="btn-add-waypoint" onclick="toggleAddWaypointPanel()">➕ Aggiungi tappa intermedia</button>

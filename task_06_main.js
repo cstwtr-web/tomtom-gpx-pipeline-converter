@@ -235,11 +235,97 @@ function initMap() {
     state.setOriginalLayer(null);
   }
 
+  // Insieme dei DOM element dei marker — usato dal long-press su sfondo mappa
+  // per distinguere "ho premuto su un marker" (→ non attivare insert mode).
+  const _markerEls = new Set();
+
   wps.forEach((w, i) => {
     const isFirst = i === 0;
     const isLast  = i === wps.length - 1;
     const label   = isFirst ? 'A — Partenza' : isLast ? 'B — Arrivo' : `Tappa ${i}`;
-    L.marker([w.lat, w.lon]).addTo(map).bindPopup(`<b>${esc(w.name)}</b><br>${label}`);
+
+    const marker = L.marker([w.lat, w.lon]).addTo(map);
+
+    // Popup con hint discoverability: l'utente vede subito come rimuovere la tappa.
+    // Il click normale apre il popup; il long-press (500ms) avvia la rimozione.
+    const hintHtml = wps.length > 2
+      ? `<div style="margin-top:6px;font-size:10px;color:#9ca3af;border-top:1px solid #f3f4f6;padding-top:5px;">
+           🖐️ Tieni premuto per rimuovere
+         </div>`
+      : '';  // non mostrare hint se sono rimaste solo 2 tappe (non si può rimuovere)
+    marker.bindPopup(
+      `<b>${esc(w.name)}</b><br><span style="color:#6b7280;font-size:11px;">${label}</span>${hintHtml}`,
+      { maxWidth: 220 }
+    );
+
+    // Traccia l'elemento DOM del marker per escluderlo dal long-press su sfondo
+    marker.on('add', () => {
+      const el = marker.getElement();
+      if (el) _markerEls.add(el);
+    });
+    marker.on('remove', () => {
+      const el = marker.getElement();
+      if (el) _markerEls.delete(el);
+    });
+
+    // ── Long-press su marker → rimozione tappa ────────────────────────────
+    // Usa pointerdown/pointerup sull'elemento DOM del marker.
+    // Non interferisce con il click normale (che apre il popup).
+    let _mLpTimer = null;
+    const LP_MARKER_MS = 500;
+
+    marker.on('mousedown touchstart', (ev) => {
+      // touchstart non ha ev.originalEvent.button
+      const oe = ev.originalEvent;
+      if (oe.button !== undefined && oe.button !== 0) return;
+      _mLpTimer = setTimeout(async () => {
+        _mLpTimer = null;
+        // Chiudi eventuale popup aperto
+        marker.closePopup();
+        map.closePopup();
+
+        // Impedisci che il click successivo apra il popup
+        marker.once('click', (e) => { L.DomEvent.stopPropagation(e); });
+
+        // Vibrazione best-effort
+        try { navigator.vibrate?.(60); } catch (_) {}
+
+        // Non permettere rimozione se rimangono solo 2 tappe
+        const wpsNow = state.getWaypoints();
+        if (wpsNow.length <= 2) {
+          addLog(`⚠️ Impossibile rimuovere: servono almeno 2 tappe`, 'warn');
+          return;
+        }
+
+        // Popup di conferma rimozione
+        const { isConfirmed } = await Swal.fire({
+          icon: 'warning',
+          title: `Rimuovere "${esc(w.name)}"?`,
+          html: `<span style="color:#6b7280;font-size:13px;">${label}</span>`,
+          showCancelButton: true,
+          confirmButtonText: '🗑️ Rimuovi',
+          cancelButtonText: 'Annulla',
+          confirmButtonColor: '#e53e3e',
+          cancelButtonColor: '#6b7280',
+        });
+
+        if (!isConfirmed) return;
+
+        const updated = state.getWaypoints().filter((_, idx) => idx !== i);
+        state.setWaypoints(updated);
+        state.pushSnapshot(`Tappa rimossa dalla mappa: "${w.name}"`);
+        addLog(`🗑️ Tappa rimossa: "${w.name}" (${label})`, 'ok');
+        await fullStateRefresh();
+      }, LP_MARKER_MS);
+    });
+
+    // Cancella il timer se il pointer si sposta o si alza
+    marker.on('mouseup touchend touchcancel', () => {
+      if (_mLpTimer) { clearTimeout(_mLpTimer); _mLpTimer = null; }
+    });
+    marker.on('drag movestart', () => {
+      if (_mLpTimer) { clearTimeout(_mLpTimer); _mLpTimer = null; }
+    });
   });
 
   // ── Map Click Mode handler ────────────────────────────────────────────────
@@ -307,10 +393,57 @@ function initMap() {
   };
   map.on('click', map._rcClickHandler);
 
-  // Mostra il bottone "Aggiungi tappa sulla mappa" quando la mappa è attiva
-  const mapClickBtn = $('mapClickBtn');
-  if (mapClickBtn) mapClickBtn.classList.add('on');
-  try { map.fitBounds(L.latLngBounds(wps.map(w => [w.lat, w.lon])).pad(0.12)); } catch (e) {}
+  // ── Long-press su mappa: attiva modalità inserimento tappa ───────────────
+  // pointerdown + timer 500ms → toggleMapClickMode() se il pointer non si muove.
+  // Il movimento >8px o pointerup prima del timeout cancella il timer (no falsi trigger
+  // durante pan/zoom touch). Registrato una sola volta grazie al flag _rcLongPressAdded.
+  if (!map._rcLongPressAdded) {
+    const mapEl = $('mapPreview');
+    let _lpTimer   = null;
+    let _lpStartX  = 0;
+    let _lpStartY  = 0;
+    const LP_MS    = 500;   // durata long-press
+    const LP_MOVE  = 8;     // px di tolleranza prima di annullare
+
+    const _lpCancel = () => { clearTimeout(_lpTimer); _lpTimer = null; };
+
+    mapEl.addEventListener('pointerdown', (e) => {
+      // Solo tasto primario (touch o sinistro mouse)
+      if (e.button !== 0 && e.pointerType === 'mouse') return;
+      // Ignora se il press è su un marker (gestito dal long-press marker)
+      if (e.target.closest('.leaflet-marker-icon, .leaflet-marker-shadow')) return;
+      _lpStartX = e.clientX;
+      _lpStartY = e.clientY;
+      _lpTimer = setTimeout(() => {
+        _lpTimer = null;
+        toggleMapClickMode();
+        try { navigator.vibrate?.(40); } catch (_) {}
+      }, LP_MS);
+    }, { passive: true });
+
+    mapEl.addEventListener('pointermove', (e) => {
+      if (!_lpTimer) return;
+      const dx = e.clientX - _lpStartX;
+      const dy = e.clientY - _lpStartY;
+      if (Math.sqrt(dx * dx + dy * dy) > LP_MOVE) _lpCancel();
+    }, { passive: true });
+
+    mapEl.addEventListener('pointerup',     _lpCancel, { passive: true });
+    mapEl.addEventListener('pointercancel', _lpCancel, { passive: true });
+
+    map._rcLongPressAdded = true;
+  }
+
+  // Mostra il banner istruzione long-press sopra la mappa
+  const hint = $('map-longpress-hint');
+  if (hint) hint.style.display = 'block';
+
+  // fitBounds solo al primo caricamento — i refresh successivi (add/remove tappa)
+  // conservano zoom e centro corrente per non disorientare l'utente.
+  if (!map._rcInitialFitDone) {
+    try { map.fitBounds(L.latLngBounds(wps.map(w => [w.lat, w.lon])).pad(0.12)); } catch (e) {}
+    map._rcInitialFitDone = true;
+  }
   requestAnimationFrame(() => {
     setTimeout(() => map.invalidateSize(), 80);
     if (!map._rcResizeListenerAdded) {
@@ -454,13 +587,8 @@ async function fullStateRefresh() {
   wpUI.updateCountWarning();
   await updateRoutingAndUI();
   wpUI.refresh();
-  // Aggiorna visibilità bottone "Aggiungi tappa sulla mappa"
-  const mapClickBtn = $('mapClickBtn');
-  if (mapClickBtn) {
-    const hasRoute = state.getWaypoints().length >= 2;
-    mapClickBtn.classList.toggle('on', hasRoute);
-    if (!hasRoute && _mapClickModeActive) toggleMapClickMode();
-  }
+  // Se non ci sono più abbastanza tappe, disattiva modalità inserimento
+  if (state.getWaypoints().length < 2 && _mapClickModeActive) toggleMapClickMode();
   // Aggiorna dashboard (Fase 1)
   updateDashboard();
   // Aggiorna pannello decisionale se già visibile (Fase 3)
@@ -479,7 +607,7 @@ async function _consentGate(wpCount, wpLimit) {
   const result = await Swal.fire({
     icon: 'warning',
     title: `Hai ${wpCount} tappe`,
-    html: `TomTom MyDrive (wireless) ne accetta max <b>21</b>.<br><br>
+    html: `L'App TomTom MyDrive EU (wireless) ne accetta max <b>20</b>.<br><br>
            <b>✂️ Riduci automaticamente:</b> mantiene le tappe alle curve e ai bivi, rimuove quelle sui rettilinei dove il navigatore non ha bisogno di indicazioni. Non puoi scegliere quali — decide la geometria del percorso.<br><br>
            <b>💾 Mantieni tutte:</b> nessuna tappa viene toccata. Esporti via cavo o microSD (fino a 255 tappe).<br><br>
            <b>✏️ Modifico manualmente:</b> torno alla lista e decido io quali tappe eliminare.`,
@@ -500,17 +628,17 @@ async function _consentGate(wpCount, wpLimit) {
 
 
 
+// ── Flag formato scelto dall'utente ──────────────────────────────────────────
+// Impostato a true quando l'utente clicca esplicitamente un bottone formato.
+// Usato da decisionExport() per decidere se aprire il popup di selezione.
+let _userHasChosenFormat = false;
+
 // ── Map Click Mode: aggiungi tappa cliccando sulla mappa ─────────────────────
 let _mapClickModeActive = false;
 
 function toggleMapClickMode() {
   _mapClickModeActive = !_mapClickModeActive;
-  const btn      = $('mapClickBtn');
-  const mapEl    = $('mapPreview');
-  if (btn) {
-    btn.textContent = _mapClickModeActive ? '🛑 Esci da modalità inserimento' : '📍 Aggiungi tappa sulla mappa';
-    btn.classList.toggle('active', _mapClickModeActive);
-  }
+  const mapEl = $('mapPreview');
   if (mapEl) mapEl.classList.toggle('crosshair-mode', _mapClickModeActive);
   addLog(_mapClickModeActive
     ? '📍 Modalità inserimento attiva — clicca sulla mappa per aggiungere una tappa'
@@ -887,15 +1015,16 @@ async function go() {
     $('progTitle').textContent = '✅ ELABORAZIONE COMPLETATA';
 
     // Formato finale: suggerisci ITN se ancora sopra limite
-    const finalCount = state.getWaypoints().length;
-    if (finalCount > 21 && state.getFormat() !== 'itn') {
+    const finalCount  = state.getWaypoints().length;
+    const myDriveLimit = state.getWpLimit();  // 20 (App) o 255 (USB/SD)
+    if (finalCount > myDriveLimit && state.getFormat() !== 'itn') {
       _setFormat('itn');
       await regenerateOutput();
-      addLog(`⚠️ Formato ITN preselezionato (${finalCount} tappe > 21)`, 'warn');
-    } else if (finalCount <= 21 && state.getFormat() === 'itn') {
+      addLog(`⚠️ Formato ITN preselezionato (${finalCount} tappe > ${myDriveLimit})`, 'warn');
+    } else if (finalCount <= myDriveLimit && state.getFormat() === 'itn') {
       _setFormat('gpx');
       await regenerateOutput();
-      addLog(`✅ Formato GPX riabilitato (${finalCount} tappe ≤ 21)`, 'ok');
+      addLog(`✅ Formato GPX riabilitato (${finalCount} tappe ≤ ${myDriveLimit})`, 'ok');
     }
 
     // Salva in cronologia
@@ -1134,21 +1263,17 @@ function showDecisionPanel() {
 
   // [FASE 4] Toggle overlay: riga visibile solo se rawRoutePoints è disponibile
   // e diverso dai routePoints correnti (cioè c'è davvero una "originale" da confrontare)
-  const toggleRow = $('dp-overlay-toggle-row');
-  if (toggleRow) {
-    const rawPts   = state.getRawRoutePoints();
-    const hasOverlay = rawPts?.length > 0 && rawPts !== state.getRoutePoints();
-    toggleRow.style.display = hasOverlay ? '' : 'none';
-    const chk = $('dp-overlay-chk');
-    if (chk) chk.checked = state.getOverlayVisible?.() ?? false;
-  }
+  const toggleRow  = $('dp-overlay-toggle-row');
+  const mapOverlay = $('map-confronta-overlay');
+  const rawPts     = state.getRawRoutePoints();
+  const hasOverlay = rawPts?.length > 0 && rawPts !== state.getRoutePoints();
+  if (toggleRow)  toggleRow.classList.toggle('visible', hasOverlay);
+  if (mapOverlay) mapOverlay.style.display = hasOverlay ? '' : 'none';
+  const chk = $('dp-overlay-chk');
+  if (chk) chk.checked = state.getOverlayVisible?.() ?? false;
 
-  // [FASE 4] Log semantico: riga visibile solo dopo un'ottimizzazione
-  const logRow = $('dp-log-row');
-  if (logRow) {
-    const rLog = state.getRemovalLog?.();
-    logRow.style.display = rLog?.length ? '' : 'none';
-  }
+  // [FASE 4] Log semantico: il pulsante log è dentro dp-overlay-toggle-row, visibile insieme a essa
+  // (nessuna logica separata necessaria — il bottone è sempre presente quando la riga è visibile)
 
   panel.classList.add('on');
   // Mostra anche la barra undo/redo
@@ -1223,6 +1348,33 @@ function showRemovalLog() {
 
 // ESPORTA — bypass di qualsiasi ottimizzazione, scarica direttamente.
 async function decisionExport() {
+  // Se l'utente non ha ancora scelto il formato, mostra popup guida
+  const currentFmt = state.getFormat();
+  if (!_userHasChosenFormat) {
+    const result = await Swal.fire({
+      icon: 'question',
+      title: 'Scegli il formato di export',
+      html: `<div style="display:flex;flex-direction:column;gap:10px;margin-top:8px;">
+        <button id="sw-gpx" style="padding:12px;border:2px solid #1e5aa8;border-radius:10px;background:#e6f0ff;color:#0f2b4d;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;">📦 GPX — TomTom MyDrive<br><span style="font-size:11px;font-weight:400;color:#4a6fa5;">Consigliato per percorsi ≤ 20 tappe via App</span></button>
+        <button id="sw-itn" style="padding:12px;border:2px solid #2c7dc3;border-radius:10px;background:#f5f9ff;color:#0f2b4d;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;">🗺️ ITN — TomTom nativo<br><span style="font-size:11px;font-weight:400;color:#4a6fa5;">Per caricamento via microSD/USB, fino a 255 tappe</span></button>
+        <button id="sw-kmz" style="padding:12px;border:2px solid #2c7dc3;border-radius:10px;background:#f5f9ff;color:#0f2b4d;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;">🌍 KMZ — Google Earth<br><span style="font-size:11px;font-weight:400;color:#4a6fa5;">Per visualizzazione su Google Earth / Maps</span></button>
+      </div>`,
+      showConfirmButton: false,
+      showCancelButton: true,
+      cancelButtonText: 'Annulla',
+      cancelButtonColor: '#9ca3af',
+      didOpen: () => {
+        ['gpx', 'itn', 'kmz'].forEach(fmt => {
+          document.getElementById(`sw-${fmt}`)?.addEventListener('click', () => {
+            _userHasChosenFormat = true;   // fix 2b: scelta dal popup
+            Swal.clickConfirm();
+            _setFormat(fmt);
+          });
+        });
+      },
+    });
+    if (result.isDismissed) return; // utente ha annullato
+  }
   addLog('✅ Esportazione diretta (nessuna ottimizzazione)', 'ok');
   await regenerateOutput();
   download();
@@ -1555,8 +1707,12 @@ function decisionWpAdjust(delta) {
         : `${diff} tappe`;
   }
 
-  // Mostra/nasconde il bottone Applica
-  if (applyBtn) applyBtn.style.display = _dpWpTarget !== wps.length ? '' : 'none';
+  // Bottone Applica sempre nascosto: il ricalcolo avviene in automatico con debounce
+  if (applyBtn) applyBtn.style.display = 'none';
+  clearTimeout(decisionWpAdjust._debounce);
+  if (_dpWpTarget !== wps.length) {
+    decisionWpAdjust._debounce = setTimeout(() => decisionWpApply(), 400);
+  }
 }
 
 async function decisionWpApply() {
@@ -1691,10 +1847,11 @@ function decisionEdit() {
   // Ripristina cronologia da localStorage
   try { state.setHistory(JSON.parse(localStorage.getItem('routeConvHistory') || '[]')); } catch (e) {}
 
-  // Formato iniziale
-  _setFormat('gpx');
+  // Formato iniziale: nessuna pre-selezione — l'utente sceglie al momento dell'export
+  // I bottoni formato partono tutti senza classe .active
   document.querySelectorAll('.fmt-btn').forEach(b => {
     b.addEventListener('click', async () => {
+      _userHasChosenFormat = true;   // fix 2b: l'utente ha scelto esplicitamente
       _setFormat(b.dataset.fmt);
       if (state.getWaypoints().length >= 2) await regenerateOutput();
     });
@@ -1702,6 +1859,20 @@ function decisionEdit() {
 
   wpUI.updateCountWarning();
   if (isIOS()) $('iosHint')?.classList.add('on');
+
+  // ── Log collassabile su mobile: click sul titolo per aprire/chiudere ──
+  $('progTitle')?.addEventListener('click', () => {
+    if (window.innerWidth <= 768) {
+      $('progressCard')?.classList.toggle('log-open');
+    }
+  });
+
+  // Mostra la X sui campi che hanno già un valore al caricamento (es. nameIn = "La mia rotta")
+  ['urlIn', 'expandedUrlIn', 'nameIn'].forEach(id => {
+    const el = $(id);
+    const btnId = id === 'urlIn' ? 'xUrl' : id === 'expandedUrlIn' ? 'xExpanded' : 'xName';
+    if (el?.value?.length > 0) $(btnId)?.classList.add('on');
+  });
 
   // Inizializza stato pulsanti undo/redo (disabilitati finché non c'è uno snapshot)
   updateUndoRedo();
@@ -1823,6 +1994,12 @@ function decisionEdit() {
   } catch (e) {}
 })();
 
+// v18.0 fix 2b — flag _userHasChosenFormat sostituisce check DOM .fmt-btn.active:
+//   - _userHasChosenFormat: false al boot, true al primo click su un .fmt-btn
+//     oppure alla prima scelta dal popup SweetAlert in decisionExport().
+//   - decisionExport() ora controlla il flag invece di querySelector('.fmt-btn.active')
+//     eliminando il falso negativo quando lo stato è aggiornato ma la classe .active
+//     non è ancora sincronizzata (o la sessione è stata ricaricata).
 // [CHECKP_TASK_06] hash: v18.0_e4c9f27
 // [FASE_1] updateDashboard(): Da→A WP, km, MyDrive flag
 //   - state.setRawImportCount() in go() FASE 2 (pre setWaypoints)
