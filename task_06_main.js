@@ -204,7 +204,16 @@ function initMap() {
   let tileLayer   = state.getTileLayerRef();
 
   if (!map) {
-    map = L.map('mapPreview').setView([wps[0].lat, wps[0].lon], 10);
+    // FIX scroll mobile: su touch device 1 dito deve scorrere la pagina, non spostare la mappa.
+    // dragging viene disabilitato di default; il gesture handler qui sotto lo riabilita
+    // solo quando vengono rilevate 2 dita contemporanee (pan) o un pinch (zoom).
+    // tap:false disabilita il tap-handler nativo di Leaflet (che confligge con il nostro
+    // long-press e con il mode click-insert): usiamo esclusivamente i nostri listener.
+    map = L.map('mapPreview', {
+      dragging:        !L.Browser.mobile,
+      tap:             false,
+      scrollWheelZoom: true,
+    }).setView([wps[0].lat, wps[0].lon], 10);
     tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map);
@@ -435,6 +444,9 @@ function initMap() {
       if (e.button !== 0 && e.pointerType === 'mouse') return;
       // Ignora se il press è su un marker (gestito dal long-press marker)
       if (e.target.closest('.leaflet-marker-icon, .leaflet-marker-shadow')) return;
+      // Se arriva un secondo dito (non primario) → annulla il timer long-press:
+      // l'utente sta iniziando un pan a 2 dita, non un long-press.
+      if (!e.isPrimary) { _lpCancel(); return; }
       _lpStartX = e.clientX;
       _lpStartY = e.clientY;
       _lpTimer = setTimeout(() => {
@@ -457,9 +469,47 @@ function initMap() {
     map._rcLongPressAdded = true;
   }
 
-  // Mostra il banner istruzione long-press sopra la mappa
+  // ── Two-finger gesture handler (mobile) ──────────────────────────────────
+  // Abilita il pan Leaflet solo quando ci sono 2+ dita sullo schermo.
+  // Con 1 dito il touch propaga al browser → la pagina scrolla normalmente.
+  // Registrato una sola volta (flag _rcGestureAdded), funziona anche dopo
+  // refresh della mappa (add/remove tappa, undo/redo).
+  if (!map._rcGestureAdded && L.Browser.mobile) {
+    const _mapElG = $('mapPreview');
+
+    _mapElG.addEventListener('touchstart', (e) => {
+      if (e.touches.length >= 2) {
+        // Due dita: abilita pan+zoom Leaflet
+        map.dragging.enable();
+      }
+    }, { passive: true });
+
+    _mapElG.addEventListener('touchend', (e) => {
+      // Appena si torna a meno di 2 dita, ridisabilita il drag
+      // così il prossimo 1-dito scrolla di nuovo la pagina.
+      if (e.touches.length < 2) {
+        map.dragging.disable();
+      }
+    }, { passive: true });
+
+    _mapElG.addEventListener('touchcancel', () => {
+      map.dragging.disable();
+    }, { passive: true });
+
+    map._rcGestureAdded = true;
+  }
+
+  // Mostra il banner istruzione long-press sopra la mappa.
+  // Su mobile aggiunge anche l'istruzione per navigare con 2 dita.
   const hint = $('map-longpress-hint');
-  if (hint) hint.style.display = 'block';
+  if (hint) {
+    hint.style.display = 'block';
+    if (L.Browser.mobile) {
+      hint.innerHTML =
+        '🖐️ Tieni premuto per aggiungere una tappa &nbsp;·&nbsp; ' +
+        '<b>2 dita</b> per spostare / zoomare la mappa';
+    }
+  }
 
   // fitBounds solo al primo caricamento — i refresh successivi (add/remove tappa)
   // conservano zoom e centro corrente per non disorientare l'utente.
@@ -2023,7 +2073,25 @@ function decisionEdit() {
 //   - decisionExport() ora controlla il flag invece di querySelector('.fmt-btn.active')
 //     eliminando il falso negativo quando lo stato è aggiornato ma la classe .active
 //     non è ancora sincronizzata (o la sessione è stata ricaricata).
-// [CHECKP_TASK_06] hash: v18.1_mobile_longpress_fix
+// [CHECKP_TASK_06] hash: v18.2_scroll_mobile_fix
+// [FIX scroll mobile] — v18.2
+//   Problema: su smartphone, toccare la mappa con 1 dito spostava la mappa invece
+//   di scorrere la pagina, rendendo difficile la navigazione verticale del contenuto.
+//   Causa: Leaflet cattura tutti i touch event sulla mappa per gestire pan/zoom,
+//   consumandoli prima che raggiungano il browser (e quindi la pagina).
+//   Fix applicato in initMap():
+//     1. L.map(…, { dragging: !L.Browser.mobile, tap: false })
+//        → su mobile, dragging parte DISABILITATO; 1 dito propaga al browser → scroll pagina.
+//          tap:false disabilita il tap-handler Leaflet (confliggeva con long-press e click-mode).
+//     2. Two-finger gesture handler (_rcGestureAdded):
+//        touchstart  (e.touches.length >= 2) → map.dragging.enable()   (pan con 2 dita)
+//        touchend    (e.touches.length <  2) → map.dragging.disable()   (ripristino 1-dito)
+//        touchcancel                         → map.dragging.disable()
+//        Listener passive:true per non impattare le performance di scroll.
+//     3. pointerdown long-press bg: aggiunto controllo !e.isPrimary → _lpCancel():
+//        il secondo dito annulla il timer long-press evitando false attivazioni
+//        durante l'inizio di un pan a 2 dita.
+//     4. Hint banner: su mobile aggiornato con "2 dita per spostare / zoomare la mappa".
 // [FIX mobile long-press marker] — v18.1
 //   Problema: long-press su marker Leaflet su Chrome/Safari mobile mostrava il menu
 //   contestuale nativo del browser ("Salva immagine") invece di avviare la rimozione tappa.
