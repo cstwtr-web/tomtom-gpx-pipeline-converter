@@ -249,6 +249,10 @@ font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-c
 transition: all .15s ease; z-index: 2; opacity: 0; pointer-events: none;
 }
 .wp-row:hover .wp-delete-btn { opacity: 1; pointer-events: auto; }
+/* FIX v18.5 — su touch device :hover non si attiva mai; rende il bottone ✕ sempre visibile */
+@media (hover: none) {
+  .wp-delete-btn { opacity: 1; pointer-events: auto; }
+}
 .wp-delete-btn:hover { background: var(--error); color: #fff; transform: translateY(-50%) scale(1.1); }
 .wp-name-input {
 width: 100%; padding: 4px 6px; border: 1.5px solid var(--p); border-radius: 6px;

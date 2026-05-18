@@ -356,8 +356,13 @@ function initMap() {
       }, LP_MARKER_MS);
     });
 
-    // Cancella il timer se il pointer si sposta o si alza
-    marker.on('mouseup touchend touchcancel', () => {
+    // Cancella il timer se il pointer si sposta o si alza.
+    // FIX v18.5 — su touch device, Leaflet emette un mouseup sintetico subito dopo
+    // il touchend; ignorarlo altrimenti cancella il long-press timer prima dei 500ms
+    // rendendo impossibile rimuovere una tappa con il long-press su mobile.
+    marker.on('mouseup touchend touchcancel', (ev) => {
+      const oe = ev.originalEvent;
+      if (oe && oe.type === 'mouseup' && 'ontouchstart' in window) return;
       if (_mLpTimer) { clearTimeout(_mLpTimer); _mLpTimer = null; }
     });
     marker.on('drag movestart', () => {
