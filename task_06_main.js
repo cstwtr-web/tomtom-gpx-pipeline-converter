@@ -371,10 +371,28 @@ function initMap() {
   if (map._rcClickHandler) map.off('click', map._rcClickHandler);
   map._rcClickHandler = async function(e) {
     if (!_mapClickModeActive) return;
+    // FIX propagation leak — timestamp invece di flag booleano.
+    // Il flag booleano (_rcIgnoreNextClick) falliva perché Leaflet accoda l'evento
+    // PRIMA che toggleMapClickMode() potesse impostare il flag.
+    // Con il timestamp: all'attivazione si segna Date.now()+350; ogni click
+    // che arriva entro quella finestra viene scartato, indipendentemente dall'ordine.
+    if (map._rcIgnoreUntil && Date.now() < map._rcIgnoreUntil) return;
     const { lat, lng } = e.latlng;
     addLog(`📍 Click mappa: (${lat.toFixed(5)}, ${lng.toFixed(5)})`, 'dim');
 
-    // Mostra popup con scelta: snap al tracciato oppure coordinata esatta
+    // FIX popup multipli: chiudi l'eventuale popup precedente prima di aprirne uno nuovo.
+    // Senza questo, ogni click in modalità editing accumulava popup sovrapposti.
+    if (map._rcActivePopup) {
+      map.closePopup(map._rcActivePopup);
+      map._rcActivePopup = null;
+    }
+
+    // Mostra popup con scelta: snap al tracciato oppure coordinata esatta.
+    // closeOnClick:false → il popup non si chiude se l'utente clicca fuori
+    //   (eviterebbe il "rimbalzo" che riapre subito un nuovo popup tramite il
+    //   click handler); la chiusura è affidata esclusivamente ai tre bottoni.
+    // autoClose:false → necessario insieme a closeOnClick:false per impedire che
+    //   Leaflet chiuda il popup quando ne viene aperto un altro.
     const popup = L.popup({ closeOnClick: false, autoClose: false })
       .setLatLng(e.latlng)
       .setContent(`
@@ -405,8 +423,10 @@ function initMap() {
         </div>
       `)
       .openOn(map);
+    map._rcActivePopup = popup;
 
-    // Handler bottoni popup
+    // Handler bottoni popup — registrati con setTimeout per garantire che il DOM
+    // del popup sia stato inserito da Leaflet prima di cercare gli elementi.
     setTimeout(() => {
       const btnSnap   = document.getElementById('rc-popup-snap');
       const btnExact  = document.getElementById('rc-popup-exact');
@@ -414,17 +434,23 @@ function initMap() {
 
       if (btnSnap) btnSnap.addEventListener('click', async () => {
         map.closePopup(popup);
-        toggleMapClickMode();
+        map._rcActivePopup = null;
+        // La modalità editing rimane attiva: l'utente può continuare ad aggiungere tappe.
+        // toggleMapClickMode() NON viene chiamato — uscita solo con il tasto ✕ o ESC.
         await _insertWaypointAtLatLon(lat, lng, false); // snap normale
       });
       if (btnExact) btnExact.addEventListener('click', async () => {
         map.closePopup(popup);
-        toggleMapClickMode();
+        map._rcActivePopup = null;
         await _insertWaypointAtLatLon(lat, lng, true); // forceRaw = no snap
       });
       if (btnCancel) btnCancel.addEventListener('click', () => {
+        // FIX rimbalzo Annulla: chiudiamo il popup ma NON propaghiamo il click alla mappa.
+        // Senza stopPropagation il click "Annulla" attraversava il DOM, veniva catturato
+        // dal click-handler della mappa e riaprива immediatamente un nuovo popup.
         map.closePopup(popup);
-        // rimane in modalità inserimento per permettere altro click
+        map._rcActivePopup = null;
+        // Modalità editing resta attiva — l'utente può fare un altro click.
       });
     }, 50);
   };
@@ -478,6 +504,18 @@ function initMap() {
   // Mostra il pulsante "Modifica mappa" (stile controllo Leaflet).
   const editCtrl = $('map-edit-ctrl');
   if (editCtrl) editCtrl.style.display = 'flex';
+
+  // FIX propagation leak: registra il click sul pulsante ✏️ direttamente qui,
+  // così possiamo impostare _rcIgnoreUntil PRIMA che toggleMapClickMode() venga
+  // chiamato dall'onclick HTML. Il timestamp blocca il click handler della mappa
+  // che altrimenti riceverebbe lo stesso evento per propagazione.
+  const editBtn = $('map-edit-btn');
+  if (editBtn && !editBtn._rcClickAdded) {
+    editBtn.addEventListener('click', () => {
+      map._rcIgnoreUntil = Date.now() + 400;
+    });
+    editBtn._rcClickAdded = true;
+  }
 
   // fitBounds solo al primo caricamento — i refresh successivi (add/remove tappa)
   // conservano zoom e centro corrente per non disorientare l'utente.
@@ -712,6 +750,13 @@ function toggleMapClickMode(forceOff = false) {
 
   } else {
     // ── Stato OFF ─────────────────────────────────────────────────────────
+    // FIX popup residuo: chiudi il popup "Aggiungi tappa" se è ancora aperto
+    // quando l'utente preme ✕ Esci o ESC.
+    const mapOff = state.getMap();
+    if (mapOff && mapOff._rcActivePopup) {
+      mapOff.closePopup(mapOff._rcActivePopup);
+      mapOff._rcActivePopup = null;
+    }
     if (btn)    { btn.style.background = '#fff'; btn.style.color = '#444'; btn.style.borderColor = 'rgba(0,0,0,0.25)'; btn.setAttribute('aria-pressed', 'false'); btn.title = 'Abilita modifica mappa'; }
     if (icon)   icon.textContent = '✏️';
     if (label)  label.textContent = 'Modifica';
@@ -2083,7 +2128,7 @@ function decisionEdit() {
 //   - decisionExport() ora controlla il flag invece di querySelector('.fmt-btn.active')
 //     eliminando il falso negativo quando lo stato è aggiornato ma la classe .active
 //     non è ancora sincronizzata (o la sessione è stata ricaricata).
-// [CHECKP_TASK_06] hash: v18.3_map_edit_button
+// [CHECKP_TASK_06] hash: v18.4_popup_snap_nsnap_restored
 // [FIX map edit button] — v18.3
 //   Problema: il long-press su sfondo mappa per attivare l'inserimento tappa
 //   causava conflitti con lo scroll/pan nativo su mobile (falsi trigger, menu
