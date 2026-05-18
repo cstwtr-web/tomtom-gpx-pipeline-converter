@@ -524,6 +524,23 @@ outline: none;
   cursor: pointer; transition: background .15s;
 }
 .dp-log-btn:hover { background: var(--p-light); }
+
+/* ── FIX long-press marker mobile (v18.1.2) ────────────────────────────────
+   Blocca il menu contestuale nativo del browser sui marker Leaflet (<img>).
+   Su iOS Safari e Chrome Android il browser intercetta il long-press su <img>
+   PRIMA che scatti qualsiasi listener JS (incluso il nostro timer a 500ms),
+   mostrando "Salva immagine / Condividi". La soluzione corretta è CSS globale:
+   agisce al momento del rendering, prima della registrazione degli eventi,
+   indipendentemente dall'ordine dei listener passive/non-passive di Leaflet.
+   ─────────────────────────────────────────────────────────────────────────── */
+.leaflet-marker-icon,
+.leaflet-marker-shadow {
+  -webkit-touch-callout: none !important;  /* iOS: blocca anteprima link/img  */
+  touch-action: none !important;           /* blocca pan/pinch browser sull'el */
+  user-select: none !important;            /* blocca selezione testo/img       */
+  -webkit-user-select: none !important;
+  -webkit-user-drag: none !important;      /* blocca drag nativo immagine      */
+}
 </style>
 </head>
 <body>
