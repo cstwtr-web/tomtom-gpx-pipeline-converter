@@ -269,8 +269,13 @@ function initMap() {
 
     // Traccia l'elemento DOM del marker per escluderlo dal long-press su sfondo
     marker.on('add', () => {
-      const el = marker.getElement();
-      if (el) {
+      // FIX timing: su alcune versioni di Leaflet marker.getElement() restituisce null
+      // durante il callback 'add' perché il DOM non è ancora completamente attaccato.
+      // setTimeout(0) cede il controllo al browser per un tick, garantendo che l'elemento
+      // sia disponibile prima di applicare stili e listener.
+      setTimeout(() => {
+        const el = marker.getElement();
+        if (!el) return;
         _markerEls.add(el);
         // FIX mobile long-press: blocca il menu contestuale nativo del browser.
         // Su Chrome/Safari mobile, un long-press su <img> (il marker Leaflet è un <img>)
@@ -290,7 +295,7 @@ function initMap() {
         // per cui il nostro ev.preventDefault() via Leaflet arriva troppo tardi.
         el.addEventListener('touchstart',  (e) => e.preventDefault(), { passive: false });
         el.addEventListener('contextmenu', (e) => e.preventDefault());
-      }
+      }, 0);
     });
     marker.on('remove', () => {
       const el = marker.getElement();
@@ -2092,7 +2097,7 @@ function decisionEdit() {
 //        il secondo dito annulla il timer long-press evitando false attivazioni
 //        durante l'inizio di un pan a 2 dita.
 //     4. Hint banner: su mobile aggiornato con "2 dita per spostare / zoomare la mappa".
-// [FIX mobile long-press marker] — v18.1
+// [FIX mobile long-press marker] — v18.1 + v18.1.1
 //   Problema: long-press su marker Leaflet su Chrome/Safari mobile mostrava il menu
 //   contestuale nativo del browser ("Salva immagine") invece di avviare la rimozione tappa.
 //   Causa: il marker Leaflet è un <img>; il browser intercettava il touchstart con il suo
@@ -2109,6 +2114,14 @@ function decisionEdit() {
 //         → fallback per long-press su desktop o Android WebView
 //   Fix secondario in marker.on('mousedown touchstart', ...):
 //     - oe.preventDefault() chiamato via Leaflet per touchstart (secondo layer di difesa)
+//   Fix v18.1.1 — timing marker.getElement():
+//     Problema: marker.getElement() restituiva null durante il callback 'add' su alcune
+//     versioni di Leaflet, perché l'elemento non era ancora completamente nel DOM.
+//     Conseguenza: il blocco CSS + addEventListener veniva saltato silenziosamente,
+//     lasciando il marker senza protezione contro il contextmenu nativo.
+//     Fix: wrappato tutto il corpo di marker.on('add') in setTimeout(..., 0) per
+//     cedere un tick al browser e garantire che getElement() restituisca l'elemento reale.
+//     Spostato anche _markerEls.add(el) dentro il setTimeout per coerenza.
 // [FASE_1] updateDashboard(): Da→A WP, km, MyDrive flag
 //   - state.setRawImportCount() in go() FASE 2 (pre setWaypoints)
 //   - updateDashboard() al termine di fullStateRefresh()
