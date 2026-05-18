@@ -430,61 +430,19 @@ function initMap() {
   };
   map.on('click', map._rcClickHandler);
 
-  // ── Long-press su mappa: attiva modalità inserimento tappa ───────────────
-  // pointerdown + timer 500ms → toggleMapClickMode() se il pointer non si muove.
-  // Il movimento >8px o pointerup prima del timeout cancella il timer (no falsi trigger
-  // durante pan/zoom touch). Registrato una sola volta grazie al flag _rcLongPressAdded.
-  if (!map._rcLongPressAdded) {
+  // ── Blocco contextmenu globale su marker (capture phase) ────────────────
+  // Registrato una sola volta. Blocca il menu contestuale nativo di Android Chrome
+  // ("Salva immagine") su tutti i marker figli. Il flag _rcContextMenuAdded
+  // impedisce listener duplicati se initMap() viene richiamato più volte.
+  if (!map._rcContextMenuAdded) {
     const mapEl = $('mapPreview');
-    let _lpTimer   = null;
-    let _lpStartX  = 0;
-    let _lpStartY  = 0;
-    const LP_MS    = 500;   // durata long-press
-    const LP_MOVE  = 8;     // px di tolleranza prima di annullare
-
-    const _lpCancel = () => { clearTimeout(_lpTimer); _lpTimer = null; };
-
-    // FIX contextmenu globale (v18.1.3) — listener in CAPTURE PHASE sul contenitore mappa.
-    // Blocca il menu contestuale nativo ("Salva immagine") su TUTTI i marker figli,
-    // immune da problemi di timing su marker.getElement() e dall'ordine dei listener
-    // passive di Leaflet. Registrato una sola volta insieme agli altri handler mappa.
-    // Su Android Chrome il contextmenu è bloccabile SOLO via preventDefault() sull'evento
-    // (touch-action:none e -webkit-touch-callout:none non bastano su Android Chrome).
     mapEl.addEventListener('contextmenu', (e) => {
       if (e.target.closest('.leaflet-marker-icon, .leaflet-marker-shadow')) {
         e.preventDefault();
         e.stopPropagation();
       }
     }, { capture: true, passive: false });
-
-    mapEl.addEventListener('pointerdown', (e) => {
-      // Solo tasto primario (touch o sinistro mouse)
-      if (e.button !== 0 && e.pointerType === 'mouse') return;
-      // Ignora se il press è su un marker (gestito dal long-press marker)
-      if (e.target.closest('.leaflet-marker-icon, .leaflet-marker-shadow')) return;
-      // Se arriva un secondo dito (non primario) → annulla il timer long-press:
-      // l'utente sta iniziando un pan a 2 dita, non un long-press.
-      if (!e.isPrimary) { _lpCancel(); return; }
-      _lpStartX = e.clientX;
-      _lpStartY = e.clientY;
-      _lpTimer = setTimeout(() => {
-        _lpTimer = null;
-        toggleMapClickMode();
-        try { navigator.vibrate?.(40); } catch (_) {}
-      }, LP_MS);
-    }, { passive: true });
-
-    mapEl.addEventListener('pointermove', (e) => {
-      if (!_lpTimer) return;
-      const dx = e.clientX - _lpStartX;
-      const dy = e.clientY - _lpStartY;
-      if (Math.sqrt(dx * dx + dy * dy) > LP_MOVE) _lpCancel();
-    }, { passive: true });
-
-    mapEl.addEventListener('pointerup',     _lpCancel, { passive: true });
-    mapEl.addEventListener('pointercancel', _lpCancel, { passive: true });
-
-    map._rcLongPressAdded = true;
+    map._rcContextMenuAdded = true;
   }
 
   // ── Two-finger gesture handler (mobile) ──────────────────────────────────
@@ -517,17 +475,9 @@ function initMap() {
     map._rcGestureAdded = true;
   }
 
-  // Mostra il banner istruzione long-press sopra la mappa.
-  // Su mobile aggiunge anche l'istruzione per navigare con 2 dita.
-  const hint = $('map-longpress-hint');
-  if (hint) {
-    hint.style.display = 'block';
-    if (L.Browser.mobile) {
-      hint.innerHTML =
-        '🖐️ Tieni premuto per aggiungere una tappa &nbsp;·&nbsp; ' +
-        '<b>2 dita</b> per spostare / zoomare la mappa';
-    }
-  }
+  // Mostra il pulsante "Modifica mappa" (stile controllo Leaflet).
+  const editCtrl = $('map-edit-ctrl');
+  if (editCtrl) editCtrl.style.display = 'flex';
 
   // fitBounds solo al primo caricamento — i refresh successivi (add/remove tappa)
   // conservano zoom e centro corrente per non disorientare l'utente.
@@ -679,7 +629,7 @@ async function fullStateRefresh() {
   await updateRoutingAndUI();
   wpUI.refresh();
   // Se non ci sono più abbastanza tappe, disattiva modalità inserimento
-  if (state.getWaypoints().length < 2 && _mapClickModeActive) toggleMapClickMode();
+  if (state.getWaypoints().length < 2 && _mapClickModeActive) toggleMapClickMode(true);
   // Aggiorna dashboard (Fase 1)
   updateDashboard();
   // Aggiorna pannello decisionale se già visibile (Fase 3)
@@ -727,13 +677,52 @@ let _userHasChosenFormat = false;
 // ── Map Click Mode: aggiungi tappa cliccando sulla mappa ─────────────────────
 let _mapClickModeActive = false;
 
-function toggleMapClickMode() {
+function toggleMapClickMode(forceOff = false) {
+  if (forceOff) _mapClickModeActive = true; // verrà invertito sotto
   _mapClickModeActive = !_mapClickModeActive;
-  const mapEl = $('mapPreview');
+
+  const mapEl   = $('mapPreview');
+  const btn     = $('map-edit-btn');
+  const icon    = $('map-edit-icon');
+  const label   = $('map-edit-label');
+  const banner  = $('map-edit-banner');
+  const ctrl    = $('map-edit-ctrl');
+
   if (mapEl) mapEl.classList.toggle('crosshair-mode', _mapClickModeActive);
-  addLog(_mapClickModeActive
-    ? '📍 Modalità inserimento attiva — clicca sulla mappa per aggiungere una tappa'
-    : '📍 Modalità inserimento disattivata', 'dim');
+
+  if (_mapClickModeActive) {
+    // ── Stato ON ──────────────────────────────────────────────────────────
+    if (btn)    { btn.style.background = '#1e5aa8'; btn.style.color = '#fff'; btn.style.borderColor = '#1e5aa8'; btn.setAttribute('aria-pressed', 'true'); btn.title = 'Esci dalla modalità modifica (o premi ESC)'; }
+    if (icon)   icon.textContent = '✕';
+    if (label)  label.textContent = 'Esci';
+    if (banner) banner.style.display = 'block';
+    if (ctrl)   ctrl.style.flexDirection = 'column';
+
+    // ESC per uscire — registrato una sola volta e rimosso all'uscita
+    if (!toggleMapClickMode._escHandler) {
+      toggleMapClickMode._escHandler = (e) => {
+        if (e.key === 'Escape' && _mapClickModeActive) toggleMapClickMode(true);
+      };
+      document.addEventListener('keydown', toggleMapClickMode._escHandler);
+    }
+
+    addLog('✏️ Modifica mappa attiva — tocca per aggiungere · tieni premuto su tappa per rimuovere · ESC per uscire', 'info');
+
+  } else {
+    // ── Stato OFF ─────────────────────────────────────────────────────────
+    if (btn)    { btn.style.background = '#fff'; btn.style.color = '#444'; btn.style.borderColor = 'rgba(0,0,0,0.25)'; btn.setAttribute('aria-pressed', 'false'); btn.title = 'Abilita modifica mappa'; }
+    if (icon)   icon.textContent = '✏️';
+    if (label)  label.textContent = 'Modifica';
+    if (banner) banner.style.display = 'none';
+
+    // Rimuovi handler ESC
+    if (toggleMapClickMode._escHandler) {
+      document.removeEventListener('keydown', toggleMapClickMode._escHandler);
+      toggleMapClickMode._escHandler = null;
+    }
+
+    addLog('✏️ Modifica mappa disattivata', 'dim');
+  }
 }
 
 // Inserisce un waypoint nel punto della rotta più vicino al click.
@@ -2091,6 +2080,20 @@ function decisionEdit() {
 //   - decisionExport() ora controlla il flag invece di querySelector('.fmt-btn.active')
 //     eliminando il falso negativo quando lo stato è aggiornato ma la classe .active
 //     non è ancora sincronizzata (o la sessione è stata ricaricata).
+// [CHECKP_TASK_06] hash: v18.3_map_edit_button
+// [FIX map edit button] — v18.3
+//   Problema: il long-press su sfondo mappa per attivare l'inserimento tappa
+//   causava conflitti con lo scroll/pan nativo su mobile (falsi trigger, menu
+//   contestuale, interferenza con 2-dita pan).
+//   Fix: rimossa tutta la logica long-press su sfondo mappa (_rcLongPressAdded,
+//   pointerdown timer, pointermove cancel). Aggiunto pulsante ✏️ dentro la mappa
+//   (posizione bottom-left, stile identico ai controlli zoom Leaflet).
+//   Funzionamento: tap sul pulsante attiva/disattiva la modalità editing.
+//   - Modalità OFF (default): mappa solo visualizzazione, zero conflitti con browser.
+//   - Modalità ON: tap su mappa = aggiunge tappa, long-press su marker = rimuove tappa.
+//   Il pulsante cambia aspetto (bianco → blu) quando la modalità è attiva.
+//   Il long-press sui marker rimane invariato (gestione rimozione tappa).
+//   Rimasto: blocco contextmenu globale capture-phase per marker (necessario su Android Chrome).
 // [CHECKP_TASK_06] hash: v18.2_scroll_mobile_fix
 // [FIX scroll mobile] — v18.2
 //   Problema: su smartphone, toccare la mappa con 1 dito spostava la mappa invece
