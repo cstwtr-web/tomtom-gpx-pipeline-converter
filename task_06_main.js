@@ -444,6 +444,19 @@ function initMap() {
 
     const _lpCancel = () => { clearTimeout(_lpTimer); _lpTimer = null; };
 
+    // FIX contextmenu globale (v18.1.3) — listener in CAPTURE PHASE sul contenitore mappa.
+    // Blocca il menu contestuale nativo ("Salva immagine") su TUTTI i marker figli,
+    // immune da problemi di timing su marker.getElement() e dall'ordine dei listener
+    // passive di Leaflet. Registrato una sola volta insieme agli altri handler mappa.
+    // Su Android Chrome il contextmenu è bloccabile SOLO via preventDefault() sull'evento
+    // (touch-action:none e -webkit-touch-callout:none non bastano su Android Chrome).
+    mapEl.addEventListener('contextmenu', (e) => {
+      if (e.target.closest('.leaflet-marker-icon, .leaflet-marker-shadow')) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }, { capture: true, passive: false });
+
     mapEl.addEventListener('pointerdown', (e) => {
       // Solo tasto primario (touch o sinistro mouse)
       if (e.button !== 0 && e.pointerType === 'mouse') return;
@@ -2122,6 +2135,17 @@ function decisionEdit() {
 //     Fix: wrappato tutto il corpo di marker.on('add') in setTimeout(..., 0) per
 //     cedere un tick al browser e garantire che getElement() restituisca l'elemento reale.
 //     Spostato anche _markerEls.add(el) dentro il setTimeout per coerenza.
+// [FIX contextmenu globale] — v18.1.3
+//   Problema: nonostante CSS touch-action:none e -webkit-touch-callout:none (index.html),
+//   su Android Chrome il menu contestuale nativo compariva ancora al long-press sui marker.
+//   Causa: su Android Chrome, touch-action:none blocca scroll/pan/zoom ma NON il contextmenu
+//   su <img>. Il contextmenu è bloccabile SOLO con e.preventDefault() sull'evento 'contextmenu'.
+//   Il listener per-marker dentro marker.on('add') era soggetto a problemi di timing
+//   (getElement() → null) e all'ordine dei listener passive di Leaflet.
+//   Fix: aggiunto listener 'contextmenu' con { capture: true, passive: false } direttamente
+//   su #mapPreview nel blocco _rcLongPressAdded (registrato UNA SOLA VOLTA).
+//   La capture phase intercetta il contextmenu di tutti i marker figli prima che il browser
+//   lo gestisca, immune da timing e dall'ordine di registrazione dei listener Leaflet.
 // [FASE_1] updateDashboard(): Da→A WP, km, MyDrive flag
 //   - state.setRawImportCount() in go() FASE 2 (pre setWaypoints)
 //   - updateDashboard() al termine di fullStateRefresh()
