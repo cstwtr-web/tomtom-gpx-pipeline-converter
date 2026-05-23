@@ -1966,13 +1966,25 @@ async function decisionWpApply() {
 
 // MODIFICA MANUALE — scrolla alla lista tappe e la evidenzia.
 function decisionEdit() {
-  const wpList = $('wpList');
-  if (wpList) {
-    wpList.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    wpList.style.outline = '2.5px solid var(--p)';
-    setTimeout(() => { wpList.style.outline = ''; }, 1800);
+  // Su mobile: apre l'accordion lista tappe se chiuso
+  if (window.innerWidth < 1024) {
+    const wrap   = $('wpList-wrap');
+    const header = $('wpList-accordion-header');
+    if (wrap && !wrap.classList.contains('open')) {
+      wrap.classList.add('open');
+      if (header) {
+        header.classList.add('open');
+        header.setAttribute('aria-expanded', 'true');
+      }
+      sessionStorage.setItem('wplist-open', 'true');
+    }
   }
-  addLog('✏️ Modalità modifica: trascina, rinomina o elimina le tappe dalla lista', 'info');
+  // Scrolla alla lista tappe (funziona su mobile e desktop)
+  const wpWrap = $('wpList-wrap');
+  if (wpWrap) {
+    wpWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  addLog('📋 Lista tappe aperta — aggiungi, rimuovi o riordina le tappe', 'info');
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
