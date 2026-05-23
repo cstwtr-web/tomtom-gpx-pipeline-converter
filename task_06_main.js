@@ -431,12 +431,18 @@ function initMap() {
       .openOn(map);
     map._rcActivePopup = popup;
 
-    // Handler bottoni popup — registrati con setTimeout per garantire che il DOM
+    // Handler bottoni popup — registrati con retry loop per garantire che il DOM
     // del popup sia stato inserito da Leaflet prima di cercare gli elementi.
-    setTimeout(() => {
+    // FIX mobile: il setTimeout fisso a 50ms non era sufficiente su Android quando
+    // Leaflet eseguiva una doppia operazione DOM (close + open) per il fix popup multipli.
+    // Il retry loop riprova ogni 50ms fino a 10 volte (500ms max) e aggancia i listener
+    // non appena i bottoni sono effettivamente presenti nel DOM.
+    const _bindPopupButtons = (attempt = 0) => {
       const btnSnap   = document.getElementById('rc-popup-snap');
       const btnExact  = document.getElementById('rc-popup-exact');
       const btnCancel = document.getElementById('rc-popup-cancel');
+
+      if (!btnSnap && attempt < 10) return setTimeout(() => _bindPopupButtons(attempt + 1), 50);
 
       if (btnSnap) btnSnap.addEventListener('click', async () => {
         map.closePopup(popup);
@@ -453,12 +459,13 @@ function initMap() {
       if (btnCancel) btnCancel.addEventListener('click', () => {
         // FIX rimbalzo Annulla: chiudiamo il popup ma NON propaghiamo il click alla mappa.
         // Senza stopPropagation il click "Annulla" attraversava il DOM, veniva catturato
-        // dal click-handler della mappa e riaprива immediatamente un nuovo popup.
+        // dal click-handler della mappa e riapriva immediatamente un nuovo popup.
         map.closePopup(popup);
         map._rcActivePopup = null;
         // Modalità editing resta attiva — l'utente può fare un altro click.
       });
-    }, 50);
+    };
+    _bindPopupButtons();
   };
   map.on('click', map._rcClickHandler);
 
