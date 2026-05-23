@@ -431,24 +431,27 @@ function initMap() {
       .openOn(map);
     map._rcActivePopup = popup;
 
-    // Handler bottoni popup — registrati con retry loop per garantire che il DOM
-    // del popup sia stato inserito da Leaflet prima di cercare gli elementi.
-    // FIX mobile: il setTimeout fisso a 50ms non era sufficiente su Android quando
-    // Leaflet eseguiva una doppia operazione DOM (close + open) per il fix popup multipli.
-    // Il retry loop riprova ogni 50ms fino a 10 volte (500ms max) e aggancia i listener
-    // non appena i bottoni sono effettivamente presenti nel DOM.
+    // Handler bottoni popup — registrati con retry loop scoped al popup corrente.
+    // FIX: document.getElementById() trovava i bottoni di un popup precedente ancora
+    // nel DOM (Leaflet non lo rimuove immediatamente), attaccando il listener su un
+    // elemento staccato -> il tap non produceva nulla.
+    // Soluzione: popup.getElement().querySelector() limita la ricerca al contenitore
+    // DOM del popup corrente, eliminando qualsiasi conflitto con popup precedenti.
     const _bindPopupButtons = (attempt = 0) => {
-      const btnSnap   = document.getElementById('rc-popup-snap');
-      const btnExact  = document.getElementById('rc-popup-exact');
-      const btnCancel = document.getElementById('rc-popup-cancel');
+      const container = popup.getElement();
+      if (!container && attempt < 10) return setTimeout(() => _bindPopupButtons(attempt + 1), 50);
+
+      const btnSnap   = container?.querySelector('#rc-popup-snap');
+      const btnExact  = container?.querySelector('#rc-popup-exact');
+      const btnCancel = container?.querySelector('#rc-popup-cancel');
 
       if (!btnSnap && attempt < 10) return setTimeout(() => _bindPopupButtons(attempt + 1), 50);
 
       if (btnSnap) btnSnap.addEventListener('click', async () => {
         map.closePopup(popup);
         map._rcActivePopup = null;
-        // La modalità editing rimane attiva: l'utente può continuare ad aggiungere tappe.
-        // toggleMapClickMode() NON viene chiamato — uscita solo con il tasto ✕ o ESC.
+        // La modalita' editing rimane attiva: l'utente puo' continuare ad aggiungere tappe.
+        // toggleMapClickMode() NON viene chiamato — uscita solo con il tasto X o ESC.
         await _insertWaypointAtLatLon(lat, lng, false); // snap normale
       });
       if (btnExact) btnExact.addEventListener('click', async () => {
@@ -462,7 +465,7 @@ function initMap() {
         // dal click-handler della mappa e riapriva immediatamente un nuovo popup.
         map.closePopup(popup);
         map._rcActivePopup = null;
-        // Modalità editing resta attiva — l'utente può fare un altro click.
+        // Modalita' editing resta attiva — l'utente puo' fare un altro click.
       });
     };
     _bindPopupButtons();
