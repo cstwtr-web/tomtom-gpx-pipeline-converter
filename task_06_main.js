@@ -351,6 +351,7 @@ function initMap() {
         const updated = state.getWaypoints().filter((_, idx) => idx !== i);
         state.setWaypoints(updated);
         state.pushSnapshot(`Tappa rimossa dalla mappa: "${w.name}"`);
+        _invalidateWpCache('rimozione manuale tappa');
         addLog(`🗑️ Tappa rimossa: "${w.name}" (${label})`, 'ok');
         await fullStateRefresh();
       }, LP_MARKER_MS);
@@ -831,6 +832,7 @@ async function _insertWaypointAtLatLon(lat, lon, forceRaw = false) {
     addLog(`➕ Tappa inserita: "${name}" dopo tappa ${insertAfterIdx + 1} → totale ${updated.length} tappe`, 'ok');
     await fullStateRefresh();
     state.pushSnapshot(`Tappa aggiunta dalla mappa: "${name}"`);
+    _invalidateWpCache('aggiunta manuale tappa');
 
   } else {
     // forceRaw OPPURE nessuna geometria disponibile:
@@ -871,6 +873,7 @@ async function _insertWaypointAtLatLon(lat, lon, forceRaw = false) {
     state.setWaypoints(updated);
     await fullStateRefresh();
     state.pushSnapshot(`Tappa esatta aggiunta dalla mappa: "${name}"`);
+    _invalidateWpCache('aggiunta manuale tappa esatta');
   }
 }
 
@@ -925,6 +928,7 @@ async function go() {
       _originalSrcType = parsed.sourceType; // salva prima che go() sovrascriva con 'trkpt' (garmin_hybrid)
       _originalWaypoints = [...wps];         // snapshot pre-riduzione per riespansione tappe
       _pinnedSet = computePinnedSet(_originalWaypoints);
+      _invalidateWpCache('nuovo file caricato');
       addLog(`📌 Tappe semantiche (pinned): ${_pinnedSet.size} su ${wps.length}`, 'dim');
       state.setRawTrkPoints(parsed.rawPoints ?? null);
       if (parsed.sourceType === 'garmin_hybrid' && parsed.rawPoints) {
@@ -1509,6 +1513,10 @@ async function decisionExport() {
     if (result.isDismissed) return; // utente ha annullato
   }
   addLog('✅ Esportazione diretta (nessuna ottimizzazione)', 'ok');
+  // Conferma: l'utente ha scelto questo numero di tappe → snapshot + riabilita undo
+  state.pushSnapshot(`Tappe fissate a ${state.getWaypoints().length} (export)`);
+  _setUndoRedoEnabled(true);
+  updateUndoRedo();
   await regenerateOutput();
   download();
 }
@@ -1777,6 +1785,27 @@ let _originalSrcType = null;
 let _originalWaypoints = null; // waypoint al momento dell'import, prima di qualsiasi riduzione
 let _pinnedSet = null;         // Set di indici in _originalWaypoints delle tappe semantiche
 
+// ── Cache percorsi per numero di tappe ───────────────────────────────────────
+// Dizionario { nTappe → { waypoints, routePoints } }.
+// Popolata da decisionWpApply() ad ogni ricalcolo. Consultata prima di ricalcolare.
+// Invalidata quando cambia la composizione delle tappe (file nuovo, modifica manuale).
+// L'undo/redo NON interagisce con questa cache: disabilita i pulsanti Annulla/Ripeti
+// mentre lo slider +/− è in uso, e li riabilita solo quando l'utente "conferma"
+// il risultato con un'azione esterna (export, modifica manuale, ecc.).
+let _wpCache = {};  // { nTappe: { waypoints: [...], routePoints: [...] | null } }
+
+function _invalidateWpCache(reason) {
+  _wpCache = {};
+  addLog(`🗑️ Cache tappe invalidata (${reason})`, 'dim');
+}
+
+function _setUndoRedoEnabled(enabled) {
+  const btnUndo = $('btn-undo');
+  const btnRedo = $('btn-redo');
+  if (btnUndo) btnUndo.disabled = !enabled || !state.canUndo();
+  if (btnRedo) btnRedo.disabled = !enabled || !state.canRedo();
+}
+
 // Restituisce true se il nome è semantico (assegnato dall'utente o dal dispositivo),
 // false se è generato automaticamente (Partenza, Destinazione, Via N, geocoding Nominatim).
 // Nomi generici assegnati automaticamente da dispositivi o dal sistema — NON semantici.
@@ -1863,6 +1892,33 @@ async function decisionWpApply() {
     showDecisionPanel();
     return;
   }
+
+  // ── Cache hit ────────────────────────────────────────────────────────────────
+  // Se abbiamo già calcolato questo numero di tappe, ripristiniamo istantaneamente
+  // senza ricalcolare. Undo/Redo restano disabilitati durante la navigazione +/−.
+  if (_wpCache[target]) {
+    const cached = _wpCache[target];
+    // Salva lo stato corrente in cache prima di sovrascrivere
+    _wpCache[wps.length] = {
+      waypoints:   wps.map(w => ({ ...w })),
+      routePoints: state.getRoutePoints() ? [...state.getRoutePoints()] : null,
+    };
+    state.setWaypoints(cached.waypoints.map(w => ({ ...w })));
+    if (cached.routePoints) state.setRoutePoints([...cached.routePoints]);
+    // Undo/Redo disabilitati: lo slider gestisce la navigazione, non lo stack snapshot
+    _setUndoRedoEnabled(false);
+    await fullStateRefresh();
+    showDecisionPanel();
+    addLog(`⚡ Cache hit: ${target} tappe ripristinate istantaneamente`, 'ok');
+    return;
+  }
+
+  // ── Cache miss: salva stato corrente, poi ricalcola ─────────────────────────
+  _wpCache[wps.length] = {
+    waypoints:   wps.map(w => ({ ...w })),
+    routePoints: state.getRoutePoints() ? [...state.getRoutePoints()] : null,
+  };
+  _setUndoRedoEnabled(false); // disabilita Annulla/Ripeti durante il ricalcolo
 
   // USA _originalSrcType (salvato al parsing), NON state.getGpxSourceType().
   // Per garmin_hybrid, go() sovrascrive srcType con 'trkpt' (riga ~788) per
@@ -1958,14 +2014,26 @@ async function decisionWpApply() {
   }
 
   state.setWaypoints(reduced);
-  state.pushSnapshot(`Ridistribuzione a ${reduced.length} tappe`);
+  // NON pushSnapshot qui: lo snapshot viene fatto solo quando l'utente esce dallo slider
+  // (export, modifica manuale, ecc.) — non ad ogni +/−.
   await fullStateRefresh();
+
+  // Salva il risultato appena calcolato in cache
+  _wpCache[reduced.length] = {
+    waypoints:   reduced.map(w => ({ ...w })),
+    routePoints: state.getRoutePoints() ? [...state.getRoutePoints()] : null,
+  };
+
   showDecisionPanel();
   addLog(`✅ Ridistribuzione completata: ${wps.length} → ${reduced.length} tappe`, 'ok');
 }
 
 // MODIFICA MANUALE — scrolla alla lista tappe e la evidenzia.
 function decisionEdit() {
+  // Conferma: l'utente ha scelto questo numero di tappe → snapshot + riabilita undo
+  state.pushSnapshot(`Tappe fissate a ${state.getWaypoints().length} (modifica manuale)`);
+  _setUndoRedoEnabled(true);
+  updateUndoRedo();
   // Su mobile: apre l'accordion lista tappe se chiuso
   if (window.innerWidth < 1024) {
     const wrap   = $('wpList-wrap');
