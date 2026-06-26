@@ -29,7 +29,13 @@ export function initMap(containerId, options = {}) {
 
   const defaultCenter = [45.4642, 9.1900]; // Centro predefinito (area Magenta/Milano)
   _map = L.map(containerId, {
-    zoomControl: false,
+    zoomControl:     false,
+    dragging:        !L.Browser.mobile, // su mobile: drag solo con due dita (task_15 gesture handler)
+    tap:             false,             // disabilita tap Leaflet — gestito da task_15
+    scrollWheelZoom: true,
+    boxZoom:         false,             // Shift+Click riservato a "Tappa intermedia" (task_15)
+    zoomSnap:        0.5,              // zoom intermedi (12.5, 13.5…) — fitBounds più preciso
+    zoomDelta:       0.5,              // bottoni +/- spostano di mezzo livello
     ...options
   }).setView(defaultCenter, 10);
 
