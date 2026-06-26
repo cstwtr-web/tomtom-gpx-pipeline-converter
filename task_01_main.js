@@ -716,4 +716,4 @@ if (document.readyState === 'loading') {
 
 // [REFACTORED step①②③④] — task_03_utils.js + task_07_geocoding_client.js estratti; step③ chirurgico interno; step④ _mapState
 // v20.1 fix A+B v2: custom DOM panel (no L.popup) — bypassa intercept touch Leaflet; bottoni funzionanti mobile
-// [CHECKP_TASK_06] hash: v20.0_popup_fix_exact_mobile
+// [CHECKP_TASK_06] hash: v21.0_popup_fix_exact_mobile
