@@ -256,20 +256,12 @@ function _rcShowBottomSheet(map) {
 
   const { lat, lng } = map.getCenter();
   sheet.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-      <div>
-        <div style="font-weight:700;color:#0f2b4d;font-size:13px;margin-bottom:2px;">📍 Posiziona la tappa</div>
-        <div id="rc-sheet-coords"
-             style="font-size:11px;color:#6b7280;font-variant-numeric:tabular-nums;letter-spacing:.3px;">
-          ${lat.toFixed(5)}, ${lng.toFixed(5)}
-        </div>
+    <div style="margin-bottom:10px;">
+      <div style="font-weight:700;color:#0f2b4d;font-size:13px;margin-bottom:2px;">📍 Posiziona la tappa</div>
+      <div id="rc-sheet-coords"
+           style="font-size:11px;color:#6b7280;font-variant-numeric:tabular-nums;letter-spacing:.3px;">
+        ${lat.toFixed(5)}, ${lng.toFixed(5)}
       </div>
-      <button id="rc-sheet-cancel"
-        style="background:transparent;border:1.5px solid #d1d5db;border-radius:8px;
-               padding:6px 12px;font-size:12px;color:#6b7280;cursor:pointer;
-               touch-action:manipulation;-webkit-tap-highlight-color:transparent;">
-        ✕ Annulla
-      </button>
     </div>
     <div style="display:flex;gap:8px;">
       <button id="rc-sheet-exact"
@@ -306,10 +298,6 @@ function _rcShowBottomSheet(map) {
   };
   map.on('move', _onMove);
   sheet._rcMoveHandler = _onMove;
-
-  sheet.querySelector('#rc-sheet-cancel').addEventListener('click', () => {
-    _rcRemoveBottomSheet(map);
-  });
 
   sheet.querySelector('#rc-sheet-snap').addEventListener('click', async () => {
     const center = map.getCenter();
