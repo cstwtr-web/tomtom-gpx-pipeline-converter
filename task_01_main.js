@@ -522,7 +522,7 @@ function fitMapToRoute() {
   if (!pts?.length) return;
   try {
     const bounds = L.latLngBounds(pts.map(p => [p.lat, p.lon]));
-    if (bounds.isValid()) map.flyToBounds(bounds, { paddingTopLeft: [8, 8], paddingBottomRight: [55, 8], maxZoom: 17, duration: 0.5 });
+    if (bounds.isValid()) map.flyToBounds(bounds, { paddingTopLeft: [8, 8], paddingBottomRight: [55, 8], maxZoom: 18, duration: 0.5 });
   } catch (e) {}
 }
 
