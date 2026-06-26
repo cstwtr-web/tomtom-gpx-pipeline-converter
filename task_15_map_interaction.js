@@ -248,16 +248,16 @@ function _rcShowBottomSheet(map) {
     'background:#fff',
     'border-radius:18px 18px 0 0',
     'box-shadow:0 -4px 24px rgba(0,0,0,0.18)',
-    'padding:10px 14px 18px',
+    'padding:8px 14px 10px',
     'font-family:inherit',
     'safe-area-inset-bottom:env(safe-area-inset-bottom)',
-    'padding-bottom:calc(18px + env(safe-area-inset-bottom,0px))',
+    'padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))',
   ].join(';');
 
   const { lat, lng } = map.getCenter();
   sheet.innerHTML = `
-    <div style="margin-bottom:10px;">
-      <div style="font-weight:700;color:#0f2b4d;font-size:13px;margin-bottom:2px;">📍 Posiziona la tappa</div>
+    <div style="margin-bottom:6px;">
+      <div style="font-weight:700;color:#0f2b4d;font-size:13px;margin-bottom:1px;">📍 Posiziona la tappa</div>
       <div id="rc-sheet-coords"
            style="font-size:11px;color:#6b7280;font-variant-numeric:tabular-nums;letter-spacing:.3px;">
         ${lat.toFixed(5)}, ${lng.toFixed(5)}
@@ -266,29 +266,38 @@ function _rcShowBottomSheet(map) {
     <div style="display:flex;gap:8px;">
       <button id="rc-sheet-exact"
         style="flex:1;background:#10b981;color:#fff;border:none;border-radius:10px;
-               padding:12px 8px;cursor:pointer;font-size:13px;font-weight:700;line-height:1.4;
+               padding:8px 8px;cursor:pointer;font-size:13px;font-weight:700;line-height:1.3;
                touch-action:manipulation;-webkit-tap-highlight-color:transparent;
                box-shadow:0 2px 8px rgba(16,185,129,.3);">
         📍 Aggiungi tappa
-        <div style="font-weight:400;font-size:10px;opacity:.85;margin-top:2px;">no snap</div>
+        <div style="font-weight:400;font-size:10px;opacity:.85;margin-top:1px;">no snap</div>
       </button>
       <button id="rc-sheet-snap"
         style="flex:1;background:var(--p);color:#fff;border:none;border-radius:10px;
-               padding:12px 8px;cursor:pointer;font-size:13px;font-weight:700;line-height:1.4;
+               padding:8px 8px;cursor:pointer;font-size:13px;font-weight:700;line-height:1.3;
                touch-action:manipulation;-webkit-tap-highlight-color:transparent;
                box-shadow:0 2px 8px rgba(30,90,168,.3);">
         🔗 Tappa intermedia
-        <div style="font-weight:400;font-size:10px;opacity:.85;margin-top:2px;">snap strada</div>
+        <div style="font-weight:400;font-size:10px;opacity:.85;margin-top:1px;">snap strada</div>
       </button>
     </div>`;
 
   document.body.appendChild(sheet);
 
-  // NOTA: "Centra mappa"/"Confronta traccia" sono ora FUORI da #mapPreview
-  // (riga indipendente sotto la mappa) — il bottom sheet, anche se
-  // position:fixed e ancorato al fondo viewport, non li sovrasta più
-  // fisicamente. Non serve quindi più nasconderli mentre il sheet è a
-  // schermo: restano sempre visibili e cliccabili, in ogni modalità.
+  // FIX STRUTTURALE: il sheet è position:fixed/bottom:0 (ancorato al
+  // viewport), mentre "Centra mappa"/"Confronta traccia" sono nel flusso
+  // normale del documento (#map-bottom-right-row, FUORI da #mapPreview).
+  // Sono due sistemi di coordinate indipendenti: ridurre solo l'altezza del
+  // sheet attenua la sovrapposizione ma non la elimina, perché con uno
+  // scroll diverso il bottone può comunque ricadere nella fascia di schermo
+  // coperta dal sheet. La soluzione robusta è riservare nel documento, sotto
+  // la mappa, uno spazio pari all'altezza REALE del sheet (misurata a runtime
+  // via offsetHeight, non stimata) — così il bottone viene sempre spinto
+  // sopra la zona "fixed", indipendentemente da come si scrolla.
+  requestAnimationFrame(() => {
+    const row = document.getElementById('map-bottom-right-row');
+    if (row) row.style.marginBottom = sheet.offsetHeight + 'px';
+  });
 
   // Aggiorna coordinate live mentre l'utente scrolla la mappa
   const _onMove = () => {
@@ -319,6 +328,8 @@ function _rcRemoveBottomSheet(map) {
   if (!sheet) return;
   if (map && sheet._rcMoveHandler) map.off('move', sheet._rcMoveHandler);
   sheet.remove();
+  const row = document.getElementById('map-bottom-right-row');
+  if (row) row.style.marginBottom = '';
 }
 
 // ── Map Click Mode ────────────────────────────────────────────────────────────
