@@ -75,16 +75,18 @@ export function drawRoute(points, color = '#1e5aa8') {
  * @param {Array<{lat,lon}>|null} points  - punti della traccia (null = rimuovi)
  * @param {boolean} [visible=true]        - se false rimuove senza ridisegnare
  * @param {string}  [color='#ff0000']     - colore polyline
+ * @returns {L.Polyline|null}             - layer creato (o null se rimosso)
  */
-export function drawOriginalTrack(points, visible = true, color = '#ff0000') {
+export function drawOriginalTrack(points, visible = true, color = '#999') {
   if (_originalPolyline) {
     _map.removeLayer(_originalPolyline);
     _originalPolyline = null;
   }
-  if (!points || points.length === 0 || !visible) return;
+  if (!points || points.length === 0 || !visible) return null;
 
   const latLngs = points.map(p => [p.lat, p.lon]);
-  _originalPolyline = L.polyline(latLngs, { color, weight: 3, opacity: 0.5, dashArray: '5, 10' }).addTo(_map);
+  _originalPolyline = L.polyline(latLngs, { color, weight: 3, opacity: 0.4, dashArray: '4, 6' }).addTo(_map);
+  return _originalPolyline;
 }
 
 /** Mostra o nasconde lo strato della traccia originale */
@@ -111,19 +113,25 @@ export function fitMapToRoute() {
 }
 
 /** Rende i waypoint sulla mappa generando i marker trascinabili (draggable) */
-export function renderWaypoints(wps, onMarkerDragEnd) {
+export function renderWaypoints(wps, onMarkerDragEnd, callbacks = {}) {
   clearMarkers();
   if (!wps || wps.length === 0) return;
+
+  const LP_MS = 500; // long-press delay, identico a task_06
 
   wps.forEach((wp, idx) => {
     let icon = _ICONS.via;
     if (idx === 0) icon = _ICONS.start;
     else if (idx === wps.length - 1) icon = _ICONS.end;
 
+    const isFirst = idx === 0;
+    const isLast  = idx === wps.length - 1;
+    const label   = isFirst ? 'A — Partenza' : isLast ? 'B — Arrivo' : `Tappa ${idx}`;
+
     const marker = L.marker([wp.lat, wp.lon], {
       icon: icon,
       draggable: true,
-      title: wp.name || `Tappa ${idx}`
+      title: wp.name || label,
     });
 
     if (onMarkerDragEnd) {
@@ -133,7 +141,57 @@ export function renderWaypoints(wps, onMarkerDragEnd) {
       });
     }
 
-    marker.bindPopup(`<b>${wp.name || `Tappa ${idx}`}</b>`);
+    // ── Long-press → rimozione tappa (ripristino da task_06) ─────────────────
+    if (callbacks.onLongPress) {
+      let _lpTimer = null;
+
+      marker.on('mousedown touchstart', (ev) => {
+        const oe = ev.originalEvent;
+        if (oe.button !== undefined && oe.button !== 0) return;
+        if (oe.type === 'touchstart') oe.preventDefault();
+        _lpTimer = setTimeout(async () => {
+          _lpTimer = null;
+          marker.closePopup();
+          _map.closePopup();
+          marker.once('click', (e) => { L.DomEvent.stopPropagation(e); });
+          try { navigator.vibrate?.(60); } catch (_) {}
+          await callbacks.onLongPress(idx, wp, label);
+        }, LP_MS);
+      });
+
+      marker.on('mouseup touchend touchcancel', (ev) => {
+        const oe = ev.originalEvent;
+        if (oe && oe.type === 'mouseup' && 'ontouchstart' in window) return;
+        if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; }
+      });
+
+      marker.on('drag movestart', () => {
+        if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; }
+      });
+
+      // Blocca contextmenu su elemento marker (prevenzione menu browser su mobile)
+      marker.on('add', () => {
+        setTimeout(() => {
+          const el = marker.getElement();
+          if (!el) return;
+          el.style.touchAction        = 'none';
+          el.style.webkitTouchCallout = 'none';
+          el.style.userSelect         = 'none';
+          el.style.webkitUserSelect   = 'none';
+          el.addEventListener('touchstart',  (e) => e.preventDefault(), { passive: false });
+          el.addEventListener('contextmenu', (e) => e.preventDefault());
+        }, 0);
+      });
+    }
+
+    const hintHtml = wps.length > 2 && callbacks.onLongPress
+      ? `<div style="margin-top:6px;font-size:10px;color:#9ca3af;border-top:1px solid #f3f4f6;padding-top:5px;">🖐️ Tieni premuto per rimuovere</div>`
+      : '';
+
+    marker.bindPopup(
+      `<b>${wp.name || label}</b><br><span style="color:#6b7280;font-size:11px;">${label}</span>${hintHtml}`,
+      { maxWidth: 220 }
+    );
     _markerGroup.addLayer(marker);
   });
 }

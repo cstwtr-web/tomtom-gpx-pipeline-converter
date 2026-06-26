@@ -36,7 +36,6 @@ import {
   renderWaypoints,
   drawRoute,
   drawOriginalTrack,
-  toggleOriginalLayer,
 } from './task_13_map_component.js';
 
 import {
@@ -113,10 +112,13 @@ state.subscribe((event) => {
 // ── [FASE 4] State locale — non modifica task_02_state.js ────────────────────
 const _f4 = {
   overlayVisible: false,
+  originalLayer:  null,   // ripristinato: necessario per toggleOriginalLayer()
   removalLog:     null,
 };
 state.getOverlayVisible  = ()  => _f4.overlayVisible;
 state.setOverlayVisible  = (v) => { _f4.overlayVisible = v; };
+state.getOriginalLayer   = ()  => _f4.originalLayer;
+state.setOriginalLayer   = (l) => { _f4.originalLayer = l; };
 state.getRemovalLog      = ()  => _f4.removalLog;
 state.setRemovalLog      = (l) => { _f4.removalLog = l; };
 
@@ -138,11 +140,44 @@ function updateMapVisuals() {
   const wps = state.getWaypoints();
   if (!$('mapPreview').classList.contains('on') || wps.length < 2) return;
 
-  // 1. Rendering dei waypoint (marker e popups) tramite il modulo isolato
+  const map = state.getMap();
+
+  // 1. Rendering dei waypoint con long-press per eliminazione (ripristinato da task_06)
   renderWaypoints(wps, (idx, lat, lng) => {
+    // dragend: aggiorna posizione tappa
     if (typeof decisionWpAdjust === 'function') {
       decisionWpAdjust(idx, lat, lng);
     }
+  }, {
+    // Callback long-press per rimozione tappa (era presente in task_06, rimosso nel refactor)
+    onLongPress: async (idx, w, label) => {
+      if (!map) return;
+      const wpsNow = state.getWaypoints();
+      if (wpsNow.length <= 2) {
+        addLog(`⚠️ Impossibile rimuovere: servono almeno 2 tappe`, 'warn');
+        return;
+      }
+      const { isConfirmed } = await Swal.fire({
+        icon: 'warning',
+        title: `Rimuovere "${esc(w.name)}"?`,
+        html: `<span style="color:#6b7280;font-size:13px;">${label}</span>`,
+        showCancelButton: true,
+        confirmButtonText: '🗑️ Rimuovi',
+        cancelButtonText: 'Annulla',
+        confirmButtonColor: '#e53e3e',
+        cancelButtonColor: '#6b7280',
+      });
+      if (!isConfirmed) return;
+      if (!$('decision-panel')?.classList.contains('on')) decisionEdit();
+      const updated = state.getWaypoints().filter((_, i) => i !== idx);
+      state.setWaypoints(updated);
+      state.pushSnapshot(`Tappa rimossa dalla mappa: "${w.name}"`, { manual: true });
+      _invalidateWpCache('rimozione manuale tappa');
+      addLog(`🗑️ Tappa rimossa: "${w.name}" (${label})`, 'ok');
+      const _mZoom = map.getZoom();
+      _mapState.focusLatLon = { lat: w.lat, lon: w.lon, zoom: _mZoom };
+      await fullStateRefresh();
+    },
   });
 
   // 2. Disegno della traccia principale (percorso ottimizzato o spezzata lineare)
@@ -153,19 +188,17 @@ function updateMapVisuals() {
     drawRoute(wps, '#f59e0b');
   }
 
-  // 3. Overlay della traccia originale tramite il modulo isolato.
-  // FIX WYSIWYG: l'overlay viene mostrato solo se il pruning ha effettivamente
-  // rimosso punti (rawPts.length > routePoints.length). Il confronto per
-  // riferimento (rawPts !== routePoints) era sempre true dopo il pruning,
-  // mostrando due tracce quasi identiche e confondendo l'utente.
+  // 3. Overlay della traccia originale — usa state.getOriginalLayer() come in task_06
   const rawPts = state.getRawRoutePoints();
   const hasMeaningfulDiff = rawPts?.length > 0 &&
     routePoints?.length > 0 &&
     rawPts.length > routePoints.length;
   if (hasMeaningfulDiff) {
-    drawOriginalTrack(rawPts, state.getOverlayVisible());
+    const overlayLayer = drawOriginalTrack(rawPts, state.getOverlayVisible());
+    state.setOriginalLayer(overlayLayer ?? null);
   } else {
     drawOriginalTrack(null, false);
+    state.setOriginalLayer(null);
   }
 
   // 4. Calcolo dei limiti geografici (bounds) per la gestione della vista globale
@@ -270,12 +303,12 @@ async function updateRoutingAndUI() {
     if (state.getPendingRouting() !== controller) return;
 
     if (route?.points?.length > 0) {
-      // Salva sempre i punti pre-pruning: sono la traccia OSRM grezza
-      // e rappresentano ciò che l'utente vede come overlay di confronto.
-      // FIX WYSIWYG: rawRoutePoints aggiornato ad ogni ricalcolo (non solo al primo)
-      // così overlay e export restano sempre sincronizzati con la rotta corrente.
-      state.setRawRoutePoints(route.points);
-      addLog(`📦 rawRoutePoints salvati: ${route.points.length} punti (pre-pruning)`, 'dim');
+      // Guard: rawRoutePoints viene salvato UNA SOLA VOLTA al primo import OSRM.
+      // Sovrascriverlo ad ogni ricalcolo distrugge il confronto before/after overlay.
+      if (!state.getRawRoutePoints()) {
+        state.setRawRoutePoints(route.points);
+        addLog(`📦 rawRoutePoints salvati: ${route.points.length} punti (pre-pruning)`, 'dim');
+      }
 
       let pts = pruneBacktracks(route.points, { addLog });
       addLog(`📐 Geometria dopo pruning: ${pts.length} punti`, 'info');
@@ -454,14 +487,19 @@ async function redoAction() {
 }
 
 
-// [FASE 4] Toggle overlay traccia originale
-// NOTA: rimossa la ridefinizione locale (collideva con l'import da task_13 —
-// SyntaxError "Identifier already declared" rilevato in debug). Operava su
-// state.getOriginalLayer()/setOriginalLayer(), un getter/setter mai chiamato
-// da nessun punto del codice: era codice morto, ora rimosso anche da _f4
-// (C1). La versione viva, collegata a drawOriginalTrack() e alla polyline
-// realmente disegnata sulla mappa, è quella esportata da
-// task_13_map_component.js (riga 39, import in alto).
+// [FASE 4] Toggle overlay traccia originale — ripristinato da task_06
+// Usa state.getOriginalLayer() aggiornato da updateMapVisuals() via drawOriginalTrack().
+// L'import da task_13 è stato rimosso: quella versione opera sulla polyline interna
+// al modulo (non sincronizzata con lo state), rendendola inutile dopo il refactor.
+function toggleOriginalLayer(checked) {
+  state.setOverlayVisible(checked);
+  const map       = state.getMap();
+  const origLayer = state.getOriginalLayer();
+  if (!map || !origLayer) return;
+  if (checked) { origLayer.addTo(map); }
+  else         { map.removeLayer(origLayer); }
+  addLog(checked ? '👁 Overlay traccia originale: attivo' : '👁 Overlay traccia originale: nascosto', 'dim');
+}
 
 // ── fitMapToRoute ────────────────────────────────────────────────────────────
 // Centra/zooma manualmente su tutto il percorso. Da agganciare a un pulsante
