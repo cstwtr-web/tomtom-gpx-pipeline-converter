@@ -29,9 +29,11 @@ let _clickCallback = null;
 const _ICON_BASE  = 'https://unpkg.com/leaflet@1.9.4/dist/images/';
 const _DISC_COLOR = '#2a6ab0';   // blu campionato dalla goccia attorno al pallino
 
+// Dischetto: 16×16px (era 14×14) — top:5px left:4px per centrare sul pallino bianco.
+// Font: 12px (1 cifra) / 9px (2+ cifre). Rapporto disc/font invariato → leggibilità ok.
 function _numberIcon(num) {
   const label = String(num);
-  const fs    = label.length > 1 ? 8 : 10;
+  const fs    = label.length > 1 ? 9 : 12;
 
   return L.divIcon({
     className: '',
@@ -53,8 +55,8 @@ function _numberIcon(num) {
         <!-- LAYER 3: dischetto che maschera il pallino bianco raster -->
         <div style="
           position:absolute;
-          top:6px;left:5px;
-          width:14px;height:14px;
+          top:5px;left:4px;
+          width:16px;height:16px;
           border-radius:50%;
           background:${_DISC_COLOR};
           pointer-events:none;"></div>
@@ -62,8 +64,8 @@ function _numberIcon(num) {
         <!-- LAYER 4: numero centrato sul dischetto -->
         <span style="
           position:absolute;
-          top:6px;left:5px;
-          width:14px;height:14px;
+          top:5px;left:4px;
+          width:16px;height:16px;
           display:flex;align-items:center;justify-content:center;
           font:700 ${fs}px/1 system-ui,Arial,sans-serif;
           color:#fff;
