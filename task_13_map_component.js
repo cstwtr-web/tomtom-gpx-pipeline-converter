@@ -133,7 +133,7 @@ export function renderWaypoints(wps, onMarkerDragEnd, callbacks = {}) {
   clearMarkers();
   if (!wps || wps.length === 0) return;
 
-  const LP_MS = 600; // long-press delay — 600ms per dare margine al dito su mobile
+  const LP_MS = 500; // long-press delay, identico a task_06
 
   wps.forEach((wp, idx) => {
     const icon = _defaultIcon; // goccia standard per tutte le tappe
@@ -158,20 +158,11 @@ export function renderWaypoints(wps, onMarkerDragEnd, callbacks = {}) {
     // ── Long-press → rimozione tappa (ripristino da task_06) ─────────────────
     if (callbacks.onLongPress) {
       let _lpTimer = null;
-      let _lpStartX = 0, _lpStartY = 0;
-      const MOVE_THRESHOLD_PX = 10; // cancella solo se il dito si sposta davvero (no micro-jitter)
 
       marker.on('mousedown touchstart', (ev) => {
         const oe = ev.originalEvent;
         if (oe.button !== undefined && oe.button !== 0) return;
-        if (oe.type === 'touchstart') {
-          oe.preventDefault();
-          _lpStartX = oe.touches[0].clientX;
-          _lpStartY = oe.touches[0].clientY;
-        } else {
-          _lpStartX = oe.clientX;
-          _lpStartY = oe.clientY;
-        }
+        if (oe.type === 'touchstart') oe.preventDefault();
         _lpTimer = setTimeout(async () => {
           _lpTimer = null;
           marker.closePopup();
@@ -188,19 +179,7 @@ export function renderWaypoints(wps, onMarkerDragEnd, callbacks = {}) {
         if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; }
       });
 
-      // Su mobile movestart scatta per qualsiasi micro-movimento:
-      // si cancella il timer solo se il dito si è spostato oltre la soglia reale.
-      marker.on('mousemove touchmove', (ev) => {
-        if (!_lpTimer) return;
-        const oe = ev.originalEvent;
-        const cx = oe.touches ? oe.touches[0].clientX : oe.clientX;
-        const cy = oe.touches ? oe.touches[0].clientY : oe.clientY;
-        if (Math.sqrt((cx - _lpStartX) ** 2 + (cy - _lpStartY) ** 2) > MOVE_THRESHOLD_PX) {
-          clearTimeout(_lpTimer); _lpTimer = null;
-        }
-      });
-
-      marker.on('drag', () => {
+      marker.on('drag movestart', () => {
         if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; }
       });
 
