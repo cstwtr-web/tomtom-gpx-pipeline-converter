@@ -211,6 +211,7 @@ export async function decisionExport() {
   setUndoRedoEnabled(true);
   _updateUndoRedo();
   await _regenerateOutput();
+  window.download?.();
 }
 
 // ── decisionOptimize ──────────────────────────────────────────────────────────
