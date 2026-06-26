@@ -10,38 +10,50 @@ let _originalPolyline = null;
 let _clickCallback = null;
 
 /**
- * Genera una divIcon a forma di goccia con la lettera dell'indice impressa.
- * Verde per la partenza (A), rosso per l'arrivo, blu per le tappe intermedie.
+ * Usa il PNG originale di Leaflet come sfondo e sovrappone la lettera
+ * esattamente sul pallino circolare della goccia (top ≈ 4 px, centrato).
+ * La shadow PNG viene tenuta separata così non interferisce con il testo.
+ * Il tint colore (verde/rosso/blu) è applicato via CSS filter senza
+ * caricare asset aggiuntivi.
  */
+const _ICON_BASE = 'https://unpkg.com/leaflet@1.9.4/dist/images/';
+
 function _letterIcon(letter, isFirst, isLast) {
-  const bg = isFirst ? '#16a34a' : isLast ? '#dc2626' : '#1e5aa8';
+  const filter = isFirst
+    ? 'hue-rotate(130deg) saturate(1.6) brightness(0.9)'    // → verde
+    : isLast
+      ? 'hue-rotate(310deg) saturate(2)   brightness(0.85)' // → rosso
+      : '';                                                  // → blu default
+
   return L.divIcon({
-    className: '',   // niente classi Leaflet di default che aggiungono bordi
-    html: `<div style="
-        position:relative;
-        width:30px;height:42px;">
-      <div style="
-        position:absolute;inset:0;
-        background:${bg};
-        border-radius:50% 50% 50% 0;
-        transform:rotate(-45deg);
-        box-shadow:0 2px 6px rgba(0,0,0,.40);
-        border:2px solid rgba(255,255,255,.85);">
-      </div>
-      <span style="
-        position:absolute;
-        top:5px;left:0;right:0;
-        text-align:center;
-        font:700 13px/1 system-ui,sans-serif;
-        color:#fff;
-        text-shadow:0 1px 2px rgba(0,0,0,.5);
-        pointer-events:none;">
-        ${letter}
-      </span>
-    </div>`,
-    iconSize:    [30, 42],
-    iconAnchor:  [15, 42],
-    popupAnchor: [0, -44],
+    className: '',  // disabilita il bordo bianco che Leaflet aggiunge di default
+    html: `
+      <div style="position:relative;width:25px;height:41px;">
+        <!-- Ombra -->
+        <img src="${_ICON_BASE}marker-shadow.png"
+             style="position:absolute;top:12px;left:-6px;width:41px;height:41px;
+                    pointer-events:none;opacity:.5;" />
+        <!-- Goccia PNG con eventuale tint colore -->
+        <img src="${_ICON_BASE}marker-icon-2x.png"
+             style="position:absolute;top:0;left:0;width:25px;height:41px;
+                    ${filter ? `filter:${filter};` : ''}
+                    pointer-events:none;" />
+        <!-- Lettera sovrapposta al pallino (top ~4px, centrata nei 25px) -->
+        <span style="
+          position:absolute;
+          top:4px;left:0;width:25px;
+          text-align:center;
+          font:700 10px/1 system-ui,sans-serif;
+          color:#fff;
+          text-shadow:0 0 3px rgba(0,0,0,.8),0 1px 2px rgba(0,0,0,.6);
+          pointer-events:none;
+          user-select:none;">
+          ${letter}
+        </span>
+      </div>`,
+    iconSize:    [25, 41],
+    iconAnchor:  [12, 41],
+    popupAnchor: [1, -34],
   });
 }
 
