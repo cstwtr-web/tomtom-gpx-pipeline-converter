@@ -155,35 +155,33 @@ export function renderWaypoints(wps, onMarkerDragEnd, callbacks = {}) {
       });
     }
 
-    // ── Long-press → rimozione tappa (ripristino da task_06) ─────────────────
+    // ── Long-press → rimozione tappa ─────────────────────────────────────────
+    // PC:     mousedown/mouseup via eventi Leaflet (funziona perfettamente)
+    // Mobile: touchstart/end direttamente sul DOM element in capture phase,
+    //         così preventDefault() blocca Leaflet PRIMA che emetta movestart.
     if (callbacks.onLongPress) {
       let _lpTimer = null;
 
-      marker.on('mousedown touchstart', (ev) => {
+      // ── PC ────────────────────────────────────────────────────────────────
+      marker.on('mousedown', (ev) => {
         const oe = ev.originalEvent;
-        if (oe.button !== undefined && oe.button !== 0) return;
-        if (oe.type === 'touchstart') oe.preventDefault();
+        if (oe.button !== 0) return;
         _lpTimer = setTimeout(async () => {
           _lpTimer = null;
           marker.closePopup();
           _map.closePopup();
           marker.once('click', (e) => { L.DomEvent.stopPropagation(e); });
-          try { navigator.vibrate?.(60); } catch (_) {}
           await callbacks.onLongPress(idx, wp, label);
         }, LP_MS);
       });
-
-      marker.on('mouseup touchend touchcancel', (ev) => {
-        const oe = ev.originalEvent;
-        if (oe && oe.type === 'mouseup' && 'ontouchstart' in window) return;
+      marker.on('mouseup', () => {
         if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; }
       });
-
       marker.on('drag movestart', () => {
         if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; }
       });
 
-      // Blocca contextmenu su elemento marker (prevenzione menu browser su mobile)
+      // ── Mobile: listener DOM nativi sul marker element ────────────────────
       marker.on('add', () => {
         setTimeout(() => {
           const el = marker.getElement();
@@ -192,8 +190,23 @@ export function renderWaypoints(wps, onMarkerDragEnd, callbacks = {}) {
           el.style.webkitTouchCallout = 'none';
           el.style.userSelect         = 'none';
           el.style.webkitUserSelect   = 'none';
-          el.addEventListener('touchstart',  (e) => e.preventDefault(), { passive: false });
           el.addEventListener('contextmenu', (e) => e.preventDefault());
+
+          el.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // blocca movestart Leaflet e menu contestuale
+            _lpTimer = setTimeout(async () => {
+              _lpTimer = null;
+              marker.closePopup();
+              _map.closePopup();
+              marker.once('click', (ev2) => { L.DomEvent.stopPropagation(ev2); });
+              try { navigator.vibrate?.(60); } catch (_) {}
+              await callbacks.onLongPress(idx, wp, label);
+            }, LP_MS);
+          }, { passive: false, capture: true });
+
+          el.addEventListener('touchend',    () => { if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; } }, { passive: true });
+          el.addEventListener('touchcancel', () => { if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; } }, { passive: true });
+          el.addEventListener('touchmove',   () => { if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; } }, { passive: true });
         }, 0);
       });
     }
