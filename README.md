@@ -1,1 +1,1 @@
-# cstwtr-web-tomtom-gpx-pipeline-converter_refactored
+La v21.0. è l'evoluzione della v20.0 che risultava avere il file tash-06-main ipertrofico. Il link originale della v20.0, già in fase di distribuzione, rimanderà d’ora in avanti alla versione più aggiornata messa in produzione > tomtom-gpx-pipeline-converter > ovvero v21.0
