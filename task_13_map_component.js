@@ -9,12 +9,17 @@ let _routePolyline = null;
 let _originalPolyline = null;
 let _clickCallback = null;
 
-// Icone ed elementi grafici per i marker sulla mappa
-const _ICONS = {
-  start: L.divIcon({ className: 'map-icon-start', html: '▶', iconSize: [24, 24], iconAnchor: [12, 12] }),
-  end:   L.divIcon({ className: 'map-icon-end',   html: '🏁', iconSize: [24, 24], iconAnchor: [12, 12] }),
-  via:   L.divIcon({ className: 'map-icon-via',   html: '●', iconSize: [16, 16], iconAnchor: [8, 8] })
-};
+// Goccia Leaflet standard — identica per tutte le tappe.
+// Semplice, riconoscibile, nessun divIcon custom che richiede CSS aggiuntivo.
+const _defaultIcon = L.icon({
+  iconUrl:       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  shadowUrl:     'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconSize:    [25, 41],
+  iconAnchor:  [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize:  [41, 41],
+});
 
 /**
  * Inizializza la mappa Leaflet sul container specificato
@@ -120,9 +125,7 @@ export function renderWaypoints(wps, onMarkerDragEnd, callbacks = {}) {
   const LP_MS = 500; // long-press delay, identico a task_06
 
   wps.forEach((wp, idx) => {
-    let icon = _ICONS.via;
-    if (idx === 0) icon = _ICONS.start;
-    else if (idx === wps.length - 1) icon = _ICONS.end;
+    const icon = _defaultIcon; // goccia standard per tutte le tappe
 
     const isFirst = idx === 0;
     const isLast  = idx === wps.length - 1;
