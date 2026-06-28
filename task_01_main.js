@@ -271,36 +271,39 @@ async function updateRoutingAndUI() {
     }
   }
 
-  // ── Routing OSRM/Valhalla ─────────────────────────────────────────────────────
+  // ── Routing OSRM/Valhalla (strategia optimistic) ────────────────────────────
+  // OSRM risponde veloce (~100-200ms) e visualizza subito la mappa.
+  // Se Valhalla risponde dopo (qualità moto migliore), aggiorna silenziosamente.
   const controller = new AbortController();
   state.setPendingRouting(controller);
+
+  // Callback chiamata da fetchSingleRoute se Valhalla arriva DOPO OSRM
+  function _applyRoute(route, label) {
+    if (!route?.points?.length) return;
+    if (state.getPendingRouting() !== controller) return; // abortato nel frattempo
+    let pts = pruneBacktracks(route.points, { addLog });
+    state.setRouteDistance(route.distance);
+    state.setRouteDuration(route.duration);
+    $('statDist').textContent = (route.distance / 1000).toFixed(1) + ' km';
+    const h = Math.floor(route.duration / 3600);
+    const m = Math.floor((route.duration % 3600) / 60);
+    $('statTime').textContent = `${h}h ${String(m).padStart(2,'0')}m`;
+    addLog(`${label}: ${(route.distance/1000).toFixed(1)} km · ${pts.length} punti`, 'ok');
+    state.setWaypoints(wps);
+    state.setRoutePoints(pts);
+    updateMapVisuals();
+    regenerateOutput();
+  }
+
   try {
     addLog(wps.length > 10 ? '🔄 Ricalcolo percorso (modalità batch)...' : '🔄 Ricalcolo percorso...', 'info');
-    const route = await engine.fetchRouteChunked(wps, controller.signal);
+    const route = await engine.fetchRouteChunked(wps, controller.signal, (valhallaRoute) => {
+      // Upgrade silenzioso: Valhalla arrivato dopo OSRM
+      _applyRoute(valhallaRoute, '⬆️ Upgrade Valhalla');
+    });
     if (state.getPendingRouting() !== controller) return;
-
-    if (route?.points?.length > 0) {
-      let pts = pruneBacktracks(route.points, { addLog });
-      addLog(`📐 Geometria dopo pruning: ${pts.length} punti`, 'info');
-
-      state.setRouteDistance(route.distance);
-      state.setRouteDuration(route.duration);
-      $('statDist').textContent = (route.distance / 1000).toFixed(1) + ' km';
-      const h = Math.floor(route.duration / 3600);
-      const m = Math.floor((route.duration % 3600) / 60);
-      $('statTime').textContent = `${h}h ${String(m).padStart(2,'0')}m`;
-      addLog(`✅ Rotta: ${(route.distance/1000).toFixed(1)} km · ${pts.length} punti`, 'ok');
-
-      state.setWaypoints(wps);
-      state.setRoutePoints(pts);
-
-      addLog(`📍 Waypoint semantici preservati: ${wps.length} tappe`, 'ok');
-      
-      // Chiamata aggiornata alla nuova logica visuale
-      updateMapVisuals();
-      
-      await regenerateOutput();
-    }
+    _applyRoute(route, `✅ Rotta (${route?._src ?? '?'})`);
+    addLog(`📍 Waypoint semantici preservati: ${wps.length} tappe`, 'ok');
   } catch (err) {
     if (err.name !== 'AbortError') addLog(`❌ Routing fallito: ${err.message}`, 'warn');
   } finally {

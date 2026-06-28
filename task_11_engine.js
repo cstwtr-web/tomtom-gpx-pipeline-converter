@@ -37,74 +37,108 @@ export function createRoutingEngine({ decodePolyline6, addLog, sleep }) {
    * @param {AbortSignal}      [signal]
    * @returns {Promise<{points,distance,duration}|null>}
    */
-  async function fetchSingleRoute(waypoints, signal) {
+  /**
+   * fetchSingleRoute — strategia "optimistic":
+   * 1. Lancia OSRM e Valhalla in parallelo.
+   * 2. Ritorna appena il primo risponde con successo.
+   * 3. Se OSRM vince, Valhalla gira ancora in background:
+   *    quando risponde chiama onValhallaUpgrade(result) per aggiornare
+   *    la mappa senza bloccare il rendering iniziale.
+   *
+   * @param {Array<{lat,lon}>} waypoints
+   * @param {AbortSignal}      [signal]
+   * @param {Function}         [onValhallaUpgrade] - callback se Valhalla arriva dopo OSRM
+   */
+  async function fetchSingleRoute(waypoints, signal, onValhallaUpgrade) {
     if (!waypoints || waypoints.length < 2) return null;
 
-    // ── Valhalla (timeout 10s) ───────────────────────────────────────────────
-    try {
-      const { combined: valSignal, clear: valClear } = makeSignal(signal, 10000);
-      const body = JSON.stringify({
-        locations: waypoints.map(w => ({ lon: w.lon, lat: w.lat })),
-        costing: 'motorcycle',
-        directions_options: { units: 'km' },
-      });
-      let r;
+    const VALHALLA_TIMEOUT_MS = 8000;
+    const OSRM_TIMEOUT_MS     = 15000;
+
+    async function tryValhalla() {
+      const { combined: valSignal, clear: valClear } = makeSignal(signal, VALHALLA_TIMEOUT_MS);
       try {
-        r = await fetch('https://valhalla.openstreetmap.de/route', {
+        const body = JSON.stringify({
+          locations: waypoints.map(w => ({ lon: w.lon, lat: w.lat })),
+          costing: 'motorcycle',
+          directions_options: { units: 'km' },
+        });
+        const r = await fetch('https://valhalla.openstreetmap.de/route', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body,
           signal: valSignal,
         });
-      } finally { valClear(); }
-
-      if (r.ok) {
+        if (!r.ok) throw new Error(`Valhalla HTTP ${r.status}`);
         const data = await r.json();
         const allCoords = [];
         for (const leg of (data?.trip?.legs ?? [])) {
-          if (typeof leg.shape === 'string' && leg.shape.length > 0) {
+          if (typeof leg.shape === 'string' && leg.shape.length > 0)
             allCoords.push(...decodePolyline6(leg.shape));
-          }
         }
-        if (allCoords.length > 0) {
-          return {
-            points:   allCoords,
-            distance: (data.trip.summary?.length ?? 0) * 1000,
-            duration:  data.trip.summary?.time ?? 0,
-          };
-        }
-      }
-    } catch (e) {
-      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-      addLog('⚠️ Valhalla non disponibile, fallback OSRM...', 'dim');
+        if (allCoords.length === 0) throw new Error('Valhalla: nessuna geometria');
+        return {
+          points:   allCoords,
+          distance: (data.trip.summary?.length ?? 0) * 1000,
+          duration:  data.trip.summary?.time ?? 0,
+          _src: 'valhalla',
+        };
+      } finally { valClear(); }
     }
 
-    // ── OSRM fallback (timeout 15s) ──────────────────────────────────────────
-    const { combined: osrmSignal, clear: osrmClear } = makeSignal(signal, 15000);
-    try {
-      const coords = waypoints.map(w => `${w.lon},${w.lat}`).join(';');
-      const url    = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
-      const r      = await fetch(url, { signal: osrmSignal });
-      if (!r.ok) throw new Error(`fetchOSRM: HTTP ${r.status}`);
-      const data = await r.json();
-      if (!data.routes?.[0]?.geometry?.coordinates?.length) throw new Error('fetchOSRM: nessuna geometria');
-      return {
-        points:   data.routes[0].geometry.coordinates.map(c => ({ lon: c[0], lat: c[1] })),
-        distance: data.routes[0].distance,
-        duration: data.routes[0].duration,
-      };
-    } finally { osrmClear(); }
+    async function tryOSRM() {
+      const { combined: osrmSignal, clear: osrmClear } = makeSignal(signal, OSRM_TIMEOUT_MS);
+      try {
+        const coords = waypoints.map(w => `${w.lon},${w.lat}`).join(';');
+        const url    = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+        const r      = await fetch(url, { signal: osrmSignal });
+        if (!r.ok) throw new Error(`OSRM HTTP ${r.status}`);
+        const data = await r.json();
+        if (!data.routes?.[0]?.geometry?.coordinates?.length) throw new Error('OSRM: nessuna geometria');
+        return {
+          points:   data.routes[0].geometry.coordinates.map(c => ({ lon: c[0], lat: c[1] })),
+          distance: data.routes[0].distance,
+          duration: data.routes[0].duration,
+          _src: 'osrm',
+        };
+      } finally { osrmClear(); }
+    }
+
+    // Lancia entrambi in parallelo
+    const valhallaPromise = tryValhalla().catch(() => null);
+    const osrmPromise     = tryOSRM().catch(() => null);
+
+    // Vince il primo che risolve con successo (non-null)
+    const first = await Promise.race([
+      valhallaPromise.then(r => r || new Promise(() => {})), // se null, aspetta per sempre
+      osrmPromise.then(r => r || new Promise(() => {})),
+    ]);
+
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+
+    if (first._src === 'osrm' && typeof onValhallaUpgrade === 'function') {
+      // OSRM ha vinto: Valhalla gira ancora in background
+      addLog('🗺️ OSRM risposto → mappa visualizzata. Valhalla in background...', 'dim');
+      valhallaPromise.then(valResult => {
+        if (valResult && !signal?.aborted) {
+          addLog('⬆️ Valhalla disponibile: aggiornamento percorso moto...', 'dim');
+          onValhallaUpgrade(valResult);
+        }
+      }).catch(() => {});
+    }
+
+    return first;
   }
 
-  // ── Chunked routing per N > 10 waypoint ─────────────────────────────────
+    // ── Chunked routing per N > 10 waypoint ─────────────────────────────────
   /**
    * @param {Array<{lat,lon}>} waypoints
    * @param {AbortSignal}      [signal]
    * @returns {Promise<{points,distance,duration}|null>}
    */
-  async function fetchRouteChunked(waypoints, signal) {
+  async function fetchRouteChunked(waypoints, signal, onValhallaUpgrade) {
     if (!waypoints || waypoints.length < 2) return null;
-    if (waypoints.length <= 10) return fetchSingleRoute(waypoints, signal);
+    if (waypoints.length <= 10) return fetchSingleRoute(waypoints, signal, onValhallaUpgrade);
 
     const CHUNK_SIZE    = 10;
     const DELAY_BASE_MS = 600; // <350ms causa 429 su server pubblici
@@ -132,7 +166,7 @@ export function createRoutingEngine({ decodePolyline6, addLog, sleep }) {
       addLog(`🔄 Segmento ${idx + 1}/${batches.length} (${batch.length} waypoint)...`, 'info');
 
       try {
-        const seg = await fetchSingleRoute(batch, signal);
+        const seg = await fetchSingleRoute(batch, signal); // no upgrade callback per chunk
         if (seg?.points?.length > 0) {
           const toAdd = (idx > 0 && allPoints.length > 0) ? seg.points.slice(1) : seg.points;
           allPoints.push(...toAdd);
