@@ -138,12 +138,13 @@ export function drawRoute(points, color = '#1e5aa8') {
 function _smartPad(map) {
   const size  = map.getSize();           // {x: larghezza px, y: altezza px}
   const RATIO = 0.04;                    // 4% del lato come respiro relativo
-  const MIN   = 12;                      // minimo assoluto (marker non a filo bordo)
-  const MAX_V = 48;                      // cap verticale: copre goccia Leaflet (41px anchor) + 7px respiro
-  const MAX_H = 20;                      // cap orizzontale invariato
+  const MIN_H = 12;                      // minimo orizzontale
+  const MIN_V = 48;                      // fisso: copre goccia Leaflet 41px + 7px respiro
+  const MAX_V = 48;
+  const MAX_H = 20;
 
-  const padH = Math.max(MIN, Math.min(MAX_H, Math.round(size.x * RATIO)));
-  const padV = Math.max(MIN, Math.min(MAX_V, Math.round(size.y * RATIO)));
+  const padH = Math.max(MIN_H, Math.min(MAX_H, Math.round(size.x * RATIO)));
+  const padV = Math.max(MIN_V, Math.min(MAX_V, Math.round(size.y * RATIO)));
   return [padV, padH];
 }
 
