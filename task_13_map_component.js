@@ -114,11 +114,28 @@ export function clearMarkers() {
   if (_markerGroup) _markerGroup.clearLayers();
 }
 
+/**
+ * Disegna la polilinea del percorso sulla mappa.
+ *
+ * FIX freeze mobile: aggiunto smoothFactor: 3 (Douglas-Peucker nativo Leaflet).
+ * Con tracce OSRM da 3000-4000 punti, Leaflet senza smoothFactor tenta di
+ * renderizzare tutti i segmenti in un singolo paint sincrono, bloccando il
+ * thread principale per diversi secondi su mobile.
+ * smoothFactor: 3 riduce i punti effettivamente disegnati in base allo zoom
+ * corrente (a zoom basso: da 3543 → ~200-400 segmenti visibili), eliminando
+ * il freeze. La qualità visiva a zoom alto resta intatta: Leaflet ricalcola
+ * dinamicamente ad ogni cambio di zoom.
+ */
 export function drawRoute(points, color = '#1e5aa8') {
   if (_routePolyline) { _map.removeLayer(_routePolyline); }
   if (!points || points.length === 0) return;
   const latLngs = points.map(p => [p.lat, p.lon]);
-  _routePolyline = L.polyline(latLngs, { color, weight: 5, opacity: 0.8 }).addTo(_map);
+  _routePolyline = L.polyline(latLngs, {
+    color,
+    weight:       5,
+    opacity:      0.8,
+    smoothFactor: 3,   // Douglas-Peucker adattivo per zoom — elimina freeze su mobile
+  }).addTo(_map);
 }
 
 /**
@@ -136,10 +153,10 @@ export function drawRoute(points, color = '#1e5aa8') {
  * pannelli, dashboard, decision-panel: tutte cose che fullStateRefresh() fa
  * PRIMA di chiamare il fit) map.getSize() può restituire ancora il valore
  * vecchio nello stesso tick sincrono. Questo costringeva ad aggiungere
- * setTimeout arbitrari per "aspettare" che la cache si aggiornasse — fragile
- * e fonte sia del rallentamento a scatti in caricamento, sia della "lentina"
- * (bottone Centra mappa) che sembrava non rispondere quando il valore letto
- * era stantio.
+ * setTimeout arbitrari per "aspettare" che il reflow fosse completato
+ * nel frattempo — fragile e fonte sia del rallentamento a scatti in
+ * caricamento, sia della "lentina" (bottone Centra mappa) che sembrava non
+ * rispondere quando il valore letto era stantio.
  * getBoundingClientRect() invece legge SEMPRE la dimensione reale e attuale
  * del DOM, in modo sincrono, senza dipendere da cache interne di Leaflet o
  * da invalidateSize() pregresso. Eliminato così il bisogno di delay/retry.
