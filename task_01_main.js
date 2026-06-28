@@ -525,8 +525,9 @@ function fitMapToRoute() {
     if (bounds.isValid()) {
       map.invalidateSize();
       const isMobile = window.matchMedia('(pointer: coarse)').matches;
-      const pad = isMobile ? 48 : 40;
-      map.flyToBounds(bounds, { padding: [pad, pad], maxZoom: 14, duration: 0.5 });
+      const padV = isMobile ? 48 : 40;
+      const padH = isMobile ? 24 : 20;
+      map.flyToBounds(bounds, { padding: [padV, padH], maxZoom: 14, duration: 0.5 });
     }
   } catch (e) {}
 }

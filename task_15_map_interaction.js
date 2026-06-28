@@ -158,9 +158,10 @@ export function _applyMapView() {
       try {
         map.invalidateSize();
         const isMobile = window.matchMedia('(pointer: coarse)').matches;
-        const pad = isMobile ? 48 : 40;
+        const padV = isMobile ? 48 : 40;
+        const padH = isMobile ? 24 : 20;
         setTimeout(() => {
-          map.fitBounds(_bounds, { padding: [pad, pad], maxZoom: 14 });
+          map.fitBounds(_bounds, { padding: [padV, padH], maxZoom: 14 });
         }, 60);
       } catch (e) {}
     }

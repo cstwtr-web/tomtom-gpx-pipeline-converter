@@ -138,15 +138,17 @@ export function toggleOriginalLayer(visible) {
 export function fitMapToBounds(bounds) {
   if (!_map || !bounds) return;
   const isMobile = window.matchMedia('(pointer: coarse)').matches;
-  const pad = isMobile ? 48 : 40;
-  _map.fitBounds(bounds, { padding: [pad, pad], maxZoom: 14 });
+  const padV = isMobile ? 48 : 40;   // verticale invariato
+  const padH = isMobile ? 24 : 20;   // orizzontale ridotto del 50%
+  _map.fitBounds(bounds, { padding: [padV, padH], maxZoom: 14 });
 }
 
 export function fitMapToRoute() {
   if (_routePolyline) {
     const isMobile = window.matchMedia('(pointer: coarse)').matches;
-    const pad = isMobile ? 48 : 40;
-    _map.fitBounds(_routePolyline.getBounds(), { padding: [pad, pad], maxZoom: 14 });
+    const padV = isMobile ? 48 : 40;
+    const padH = isMobile ? 24 : 20;
+    _map.fitBounds(_routePolyline.getBounds(), { padding: [padV, padH], maxZoom: 14 });
   }
 }
 
