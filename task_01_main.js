@@ -465,6 +465,11 @@ async function redoAction() {
 // locale su state.getMap()/getRoutePoints()/getWaypoints() con flyToBounds
 // animato + fallback sui waypoint grezzi.
 // Il padding è delegato a getSmartPad (export di task_13): unica fonte di verità.
+// FIX (lentina/bottone insensibile): getSmartPad ora legge le dimensioni
+// reali del contenitore via getBoundingClientRect() invece della cache
+// interna di Leaflet (map.getSize()), quindi non serve più sperare che
+// l'invalidateSize() qui sotto abbia già "fatto effetto" sul reflow del
+// browser nello stesso tick sincrono: il padding calcolato è sempre corretto.
 function fitMapToRoute() {
   const map = state.getMap();
   if (!map) return;

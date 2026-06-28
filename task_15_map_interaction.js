@@ -25,9 +25,11 @@ let _mapClickModeActive = false;
 
 // Debounce del primo fitBounds: in un singolo go() fullStateRefresh() può
 // essere chiamato 2-3 volte in sequenza (pre-consenso, post-riduzione,
-// post-redistribuzione trkpt). Senza debounce ogni chiamata armava il
-// proprio setTimeout + invalidateSize, causando fit multipli "a scatti"
-// durante il caricamento (FIX rallentamento caricamento mappa).
+// post-redistribuzione trkpt). Senza debounce ogni chiamata eseguiva il
+// proprio fitBounds, causando fit multipli "a scatti" durante il
+// caricamento (FIX rallentamento caricamento mappa). Implementato con
+// requestAnimationFrame (id numerico, non un timer in ms): si fonde con il
+// frame di rendering corrente invece di indovinare un delay arbitrario.
 let _fitDebounceTimer = null;
 
 // Dipendenze iniettate da initMapInteraction()
@@ -154,17 +156,26 @@ export function initMap() {
 //   3. Nessuno dei due → non si tocca la view: l'utente resta esattamente
 //      dove si trovava.
 //
-// FIX rallentamento caricamento (debounce primo fit):
-// go() può chiamare fullStateRefresh() 2-3 volte in sequenza nello stesso
-// caricamento (pre-consenso → post-riduzione tappe → post-redistribuzione
-// trkpt). Prima di questo fix, ogni chiamata armava un proprio
-// invalidateSize() doppio + setTimeout(60ms) → fitBounds, quindi la mappa
-// "scattava" più volte con bounds intermedi (calcolati su dati grezzi non
-// ancora definitivi) prima di stabilizzarsi sul fit finale, qualche secondo
-// dopo. Ora _mapState.hasBeenFitted passa a true SOLO quando il fit viene
-// davvero eseguito: se arriva una nuova richiesta di fit mentre la
-// precedente è ancora in coda, quella vecchia viene annullata e si aspetta
-// solo l'ultima (bounds più recenti = quelli giusti).
+// FIX rallentamento caricamento + lentina "Centra mappa" (causa radice):
+// task_13_map_component._smartPad() calcolava il padding leggendo
+// map.getSize(), un valore CACHATO da Leaflet che si aggiorna solo dopo che
+// invalidateSize() ha girato E il browser ha completato il reflow — non
+// nello stesso tick sincrono. go() può chiamare fullStateRefresh() 2-3 volte
+// di fila nello stesso caricamento (pre-consenso → post-riduzione tappe →
+// post-redistribuzione trkpt), e fullStateRefresh() cambia diverse classi
+// CSS (dashboard, decision-panel) PRIMA di arrivare qui: _smartPad poteva
+// quindi leggere dimensioni stantie. Il vecchio workaround era un
+// setTimeout(60ms) "alla cieca" per sperare che il reflow fosse completato
+// nel frattempo — fragile, e comunque moltiplicato ad ogni fullStateRefresh
+// causava i fit "a scatti" durante il caricamento.
+// _smartPad ora legge getBoundingClientRect() (sempre sincrono e attuale,
+// indipendente dalla cache di Leaflet), quindi il delay arbitrario non è più
+// necessario per la correttezza del padding. Resta però utile un debounce
+// leggero (via requestAnimationFrame, non un numero di ms indovinato) per
+// evitare di eseguire un fitBounds per ognuna delle 2-3 chiamate consecutive
+// di fullStateRefresh: si esegue solo l'ultima richiesta, con i bounds più
+// recenti (es. quelli post-routing OSRM, non quelli grezzi del primo render
+// provvisorio).
 export function _applyMapView() {
   const map = _state.getMap();
   if (!map) return;
@@ -176,18 +187,17 @@ export function _applyMapView() {
     if (!_bounds) return; // niente da inquadrare ancora: non segnare hasBeenFitted
 
     // Annulla un eventuale fit precedente non ancora eseguito: contano solo
-    // i bounds più recenti (es. quelli post-routing OSRM, non quelli grezzi
-    // pre-routing usati per il primo render provvisorio).
-    if (_fitDebounceTimer) clearTimeout(_fitDebounceTimer);
+    // i bounds più recenti.
+    if (_fitDebounceTimer) cancelAnimationFrame(_fitDebounceTimer);
 
-    _fitDebounceTimer = setTimeout(() => {
+    _fitDebounceTimer = requestAnimationFrame(() => {
       _fitDebounceTimer = null;
       _mapState.hasBeenFitted = true;
       try {
         map.invalidateSize();
         _t13FitMapToBounds(_mapState.pendingBounds);
       } catch (e) {}
-    }, 60);
+    });
   } else if (_mapState.focusLatLon) {
     const { lat, lon, zoom } = _mapState.focusLatLon;
     _mapState.focusLatLon = null;

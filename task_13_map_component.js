@@ -129,12 +129,28 @@ export function drawRoute(points, color = '#1e5aa8') {
  * Questo elimina il 36px di padding inferiore sprecato che riduceva lo zoom
  * sui percorsi nord-sud.
  *
+ * FIX (timing/lentina): la larghezza non viene più letta da map.getSize().
+ * map.getSize() è un valore CACHATO da Leaflet e viene aggiornato solo dopo
+ * che invalidateSize() ha già girato e il browser ha completato il reflow —
+ * se il contenitore mappa ha appena cambiato dimensione (apertura/chiusura
+ * pannelli, dashboard, decision-panel: tutte cose che fullStateRefresh() fa
+ * PRIMA di chiamare il fit) map.getSize() può restituire ancora il valore
+ * vecchio nello stesso tick sincrono. Questo costringeva ad aggiungere
+ * setTimeout arbitrari per "aspettare" che la cache si aggiornasse — fragile
+ * e fonte sia del rallentamento a scatti in caricamento, sia della "lentina"
+ * (bottone Centra mappa) che sembrava non rispondere quando il valore letto
+ * era stantio.
+ * getBoundingClientRect() invece legge SEMPRE la dimensione reale e attuale
+ * del DOM, in modo sincrono, senza dipendere da cache interne di Leaflet o
+ * da invalidateSize() pregresso. Eliminato così il bisogno di delay/retry.
+ *
  * @param {L.Map} map
  * @returns {{ paddingTopLeft: L.Point, paddingBottomRight: L.Point }}
  */
 function _smartPad(map) {
-  const size = map.getSize();
-  const padH = Math.max(12, Math.min(20, Math.round(size.x * 0.04)));
+  const rect  = map.getContainer().getBoundingClientRect();
+  const width = rect.width || map.getSize().x; // fallback estremo: container non ancora nel DOM
+  const padH  = Math.max(12, Math.min(20, Math.round(width * 0.04)));
   return {
     paddingTopLeft:     L.point(padH, 48),   // [left, top]
     paddingBottomRight: L.point(padH, 28),   // [right, bottom] — 20px attribution + 8px respiro
@@ -143,11 +159,17 @@ function _smartPad(map) {
 
 export function fitMapToBounds(bounds) {
   if (!_map || !bounds) return;
+  // invalidateSize() sincrono immediatamente prima del fit: garantisce che
+  // Leaflet ricalcoli la propria vista interna sulle dimensioni reali attuali
+  // (lette via _smartPad → getBoundingClientRect, non dalla cache). Nessun
+  // setTimeout necessario: niente qui dipende più dal timing del reflow.
+  _map.invalidateSize();
   _map.fitBounds(bounds, { ..._smartPad(_map), maxZoom: 14 });
 }
 
 export function fitMapToRoute() {
   if (_routePolyline) {
+    _map.invalidateSize();
     _map.fitBounds(_routePolyline.getBounds(), { ..._smartPad(_map), maxZoom: 14 });
   }
 }
