@@ -35,6 +35,7 @@ import { parseFile, extractStops, extractAllWaypointCoords, coordStr, isBlob, bl
 import {
   renderWaypoints,
   drawRoute,
+  getSmartPad,
 } from './task_13_map_component.js';
 
 import {
@@ -471,8 +472,7 @@ async function redoAction() {
 // NOTA: collideva con un omonimo export di task_13. Tenuta questa versione
 // locale su state.getMap()/getRoutePoints()/getWaypoints() con flyToBounds
 // animato + fallback sui waypoint grezzi.
-// Il padding è delegato a _smartPad (via fitMapToBounds di task_13):
-// nessun valore hardcoded qui → unica fonte di verità.
+// Il padding è delegato a getSmartPad (export di task_13): unica fonte di verità.
 function fitMapToRoute() {
   const map = state.getMap();
   if (!map) return;
@@ -484,21 +484,9 @@ function fitMapToRoute() {
     const bounds = L.latLngBounds(pts.map(p => [p.lat, p.lon]));
     if (bounds.isValid()) {
       map.invalidateSize();
-      const pad = _computeSmartPad(map);
-      map.flyToBounds(bounds, { padding: pad, maxZoom: 14, duration: 0.5 });
+      map.flyToBounds(bounds, { ...getSmartPad(map), maxZoom: 14, duration: 0.5 });
     }
   } catch (e) {}
-}
-
-// Helper locale — replica la logica di _smartPad da task_13 senza importarla.
-// Padding asimmetrico: top=48px (goccia Leaflet 41px + 7px), bottom=12px.
-function _computeSmartPad(map) {
-  const size = map.getSize();
-  const padH = Math.max(12, Math.min(20, Math.round(size.x * 0.04)));
-  return {
-    paddingTopLeft:     L.point(padH, 48),
-    paddingBottomRight: L.point(padH, 12),
-  };
 }
 
 

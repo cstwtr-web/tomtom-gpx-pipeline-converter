@@ -125,7 +125,7 @@ export function drawRoute(points, color = '#1e5aa8') {
  * Calcola il padding asimmetrico per fitBounds.
  * La goccia Leaflet si estende 41px SOPRA l'anchor geografico, nulla sotto:
  *   paddingTopLeft     → top=48px (41px goccia + 7px respiro), left=dinamico
- *   paddingBottomRight → bottom=12px (solo respiro minimo),    right=dinamico
+ *   paddingBottomRight → bottom=28px (20px attribution bar + 8px respiro), right=dinamico
  * Questo elimina il 36px di padding inferiore sprecato che riduceva lo zoom
  * sui percorsi nord-sud.
  *
@@ -137,7 +137,7 @@ function _smartPad(map) {
   const padH = Math.max(12, Math.min(20, Math.round(size.x * 0.04)));
   return {
     paddingTopLeft:     L.point(padH, 48),   // [left, top]
-    paddingBottomRight: L.point(padH, 12),   // [right, bottom]
+    paddingBottomRight: L.point(padH, 28),   // [right, bottom] — 20px attribution + 8px respiro
   };
 }
 
@@ -151,6 +151,16 @@ export function fitMapToRoute() {
     _map.fitBounds(_routePolyline.getBounds(), { ..._smartPad(_map), maxZoom: 14 });
   }
 }
+
+/**
+ * Espone il padding asimmetrico calcolato da _smartPad come export pubblico,
+ * così task_01 può usarlo senza duplicare la logica.
+ * Unica fonte di verità per paddingTopLeft / paddingBottomRight.
+ *
+ * @param {L.Map} map
+ * @returns {{ paddingTopLeft: L.Point, paddingBottomRight: L.Point }}
+ */
+export function getSmartPad(map) { return _smartPad(map); }
 
 export function renderWaypoints(wps, onMarkerDragEnd, callbacks = {}) {
   // Difesa: se _markerGroup è stato rimosso dalla mappa, lo re-aggancia
