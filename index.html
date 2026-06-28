@@ -1068,8 +1068,8 @@ outline: none;
     </label>
   </div>
 
-  <!-- Modifica lista — apre la lista tappe E attiva la modalità editing -->
-  <button id="btn-edit-list" class="dp-btn-edit dp-btn-edit-list" onclick="toggleWpListAccordion(); decisionEdit();">
+  <!-- Modifica lista — toggle: apre+attiva editing / chiude -->
+  <button id="btn-edit-list" class="dp-btn-edit dp-btn-edit-list" onclick="toggleWpListWithEdit()">
     ✏️ Modifica lista
   </button>
 
@@ -1161,12 +1161,31 @@ function toggleWpListAccordion() {
   header.setAttribute('aria-expanded', String(!isOpen));
   sessionStorage.setItem('wplist-open', String(!isOpen));
   // Aggiorna visivamente il bottone "Modifica lista"
-  var btn = document.getElementById('btn-edit-list');
-  if (btn) {
-    var willBeOpen = !isOpen;
-    btn.classList.toggle('list-open', willBeOpen);
-    btn.innerHTML = willBeOpen ? '✕ Chiudi lista' : '✏️ Modifica lista';
+  _syncEditListBtn(!isOpen);
+}
+
+// Chiamata dal bottone "Modifica lista": apre+editing o chiude
+function toggleWpListWithEdit() {
+  if (window.innerWidth >= 1024) return;
+  var wrap = document.getElementById('wpList-wrap');
+  if (!wrap) return;
+  var isOpen = wrap.classList.contains('open');
+  if (isOpen) {
+    // Lista aperta → la chiudo, niente decisionEdit
+    toggleWpListAccordion();
+  } else {
+    // Lista chiusa → la apro e attivo la modalità editing
+    toggleWpListAccordion();
+    if (typeof decisionEdit === 'function') decisionEdit();
   }
+}
+
+// Sincronizza label e colore del bottone in base allo stato open/closed
+function _syncEditListBtn(isOpen) {
+  var btn = document.getElementById('btn-edit-list');
+  if (!btn) return;
+  btn.classList.toggle('list-open', isOpen);
+  btn.innerHTML = isOpen ? '✕ Chiudi lista' : '✏️ Modifica lista';
 }
 
 /* Inizializza accordion lista tappe al caricamento */

@@ -138,8 +138,8 @@ export function toggleOriginalLayer(visible) {
 export function fitMapToBounds(bounds) {
   if (!_map || !bounds) return;
   const isMobile = window.matchMedia('(pointer: coarse)').matches;
-  const padV = isMobile ? 48 : 40;   // verticale invariato
-  const padH = isMobile ? 24 : 20;   // orizzontale ridotto del 50%
+  const padV = isMobile ? 48 : 40;
+  const padH = isMobile ? 24 : 20;
   _map.fitBounds(bounds, { padding: [padV, padH], maxZoom: 14 });
 }
 
