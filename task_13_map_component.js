@@ -122,40 +122,33 @@ export function drawRoute(points, color = '#1e5aa8') {
 }
 
 /**
- * Calcola il padding ottimale per fitBounds in base alle dimensioni reali del container.
- * Usa il 4% del lato come respiro relativo, con un minimo di 12px e cap
- * asimmetrico (V ≤ 28px, H ≤ 20px) per massimizzare l'area utile della traccia
- * indipendentemente dalla geometria del percorso (est-ovest, nord-sud, diagonale).
+ * Calcola il padding asimmetrico per fitBounds.
+ * La goccia Leaflet si estende 41px SOPRA l'anchor geografico, nulla sotto:
+ *   paddingTopLeft     → top=48px (41px goccia + 7px respiro), left=dinamico
+ *   paddingBottomRight → bottom=12px (solo respiro minimo),    right=dinamico
+ * Questo elimina il 36px di padding inferiore sprecato che riduceva lo zoom
+ * sui percorsi nord-sud.
  *
- * Perché cap asimmetrico:
- *   - padH = 20px coincide col comportamento precedente su desktop (nessuna regressione).
- *   - padV cap a 48px: copre l'altezza della goccia Leaflet (41px sopra l'anchor)
- *     più un minimo respiro visivo (7px), evitando il clip del marker più a nord/sud.
- *
- * @param {L.Map} map - istanza Leaflet con container già dimensionato
- * @returns {[number, number]} [padV, padH] in pixel
+ * @param {L.Map} map
+ * @returns {{ paddingTopLeft: L.Point, paddingBottomRight: L.Point }}
  */
 function _smartPad(map) {
-  const size  = map.getSize();           // {x: larghezza px, y: altezza px}
-  const RATIO = 0.04;                    // 4% del lato come respiro relativo
-  const MIN_H = 12;                      // minimo orizzontale
-  const MIN_V = 48;                      // fisso: copre goccia Leaflet 41px + 7px respiro
-  const MAX_V = 48;
-  const MAX_H = 20;
-
-  const padH = Math.max(MIN_H, Math.min(MAX_H, Math.round(size.x * RATIO)));
-  const padV = Math.max(MIN_V, Math.min(MAX_V, Math.round(size.y * RATIO)));
-  return [padV, padH];
+  const size = map.getSize();
+  const padH = Math.max(12, Math.min(20, Math.round(size.x * 0.04)));
+  return {
+    paddingTopLeft:     L.point(padH, 48),   // [left, top]
+    paddingBottomRight: L.point(padH, 12),   // [right, bottom]
+  };
 }
 
 export function fitMapToBounds(bounds) {
   if (!_map || !bounds) return;
-  _map.fitBounds(bounds, { padding: _smartPad(_map), maxZoom: 14 });
+  _map.fitBounds(bounds, { ..._smartPad(_map), maxZoom: 14 });
 }
 
 export function fitMapToRoute() {
   if (_routePolyline) {
-    _map.fitBounds(_routePolyline.getBounds(), { padding: _smartPad(_map), maxZoom: 14 });
+    _map.fitBounds(_routePolyline.getBounds(), { ..._smartPad(_map), maxZoom: 14 });
   }
 }
 

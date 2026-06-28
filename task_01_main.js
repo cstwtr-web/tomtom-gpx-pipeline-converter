@@ -490,15 +490,15 @@ function fitMapToRoute() {
   } catch (e) {}
 }
 
-// Helper locale — replica la logica di _smartPad da task_13 senza importarla
-// (task_01 non può importare funzioni non-esportate; evita di esporre _smartPad
-//  come export pubblico solo per questo uso).
+// Helper locale — replica la logica di _smartPad da task_13 senza importarla.
+// Padding asimmetrico: top=48px (goccia Leaflet 41px + 7px), bottom=12px.
 function _computeSmartPad(map) {
-  const size  = map.getSize();
-  const RATIO = 0.04, MIN_H = 12, MIN_V = 48, MAX_V = 48, MAX_H = 20;
-  const padH  = Math.max(MIN_H, Math.min(MAX_H, Math.round(size.x * RATIO)));
-  const padV  = Math.max(MIN_V, Math.min(MAX_V, Math.round(size.y * RATIO)));
-  return [padV, padH];
+  const size = map.getSize();
+  const padH = Math.max(12, Math.min(20, Math.round(size.x * 0.04)));
+  return {
+    paddingTopLeft:     L.point(padH, 48),
+    paddingBottomRight: L.point(padH, 12),
+  };
 }
 
 
