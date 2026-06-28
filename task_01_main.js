@@ -481,7 +481,7 @@ function fitMapToRoute() {
   const pts = routePoints?.length > 0 ? routePoints : wps;
   if (!pts?.length) return;
   try {
-    const bounds = L.latLngBounds(pts.map(p => [p.lat, p.lon ?? p.lng]));  // fix: routePoints OSRM usano .lng
+    const bounds = L.latLngBounds(pts.map(p => [p.lat, p.lon]));
     if (bounds.isValid()) {
       map.invalidateSize();
       const pad = _computeSmartPad(map);
@@ -491,14 +491,13 @@ function fitMapToRoute() {
 }
 
 // Helper locale — replica la logica di _smartPad da task_13 senza importarla.
-// Padding asimmetrico: top=48px (goccia Leaflet 41px + 7px), bottom=32px.
-// bottom alzato da 12 a 32 (20px attribution OSM + 12px respiro) — fix marker sud coperto.
+// Padding asimmetrico: top=48px (goccia Leaflet 41px + 7px), bottom=12px.
 function _computeSmartPad(map) {
   const size = map.getSize();
   const padH = Math.max(12, Math.min(20, Math.round(size.x * 0.04)));
   return {
     paddingTopLeft:     L.point(padH, 48),
-    paddingBottomRight: L.point(padH, 32),   // 20px attribution + 12px respiro
+    paddingBottomRight: L.point(padH, 12),
   };
 }
 
