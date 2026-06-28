@@ -293,9 +293,15 @@ function _rcShowBottomSheet(map) {
   // la mappa, uno spazio pari all'altezza REALE del sheet (misurata a runtime
   // via offsetHeight, non stimata) — così il bottone viene sempre spinto
   // sopra la zona "fixed", indipendentemente da come si scrolla.
+  // FIX: doppio rAF — nel primo frame il browser non ha ancora calcolato
+  // offsetHeight del sheet appena inserito nel DOM (vale 0). Il secondo frame
+  // garantisce che il layout sia stato eseguito e offsetHeight sia reale.
+  // Fallback 100px per dispositivi lenti dove anche il secondo frame è incerto.
   requestAnimationFrame(() => {
-    const row = document.getElementById('map-bottom-right-row');
-    if (row) row.style.marginBottom = sheet.offsetHeight + 'px';
+    requestAnimationFrame(() => {
+      const row = document.getElementById('map-bottom-right-row');
+      if (row) row.style.marginBottom = (sheet.offsetHeight || 100) + 'px';
+    });
   });
 
   // Aggiorna coordinate live mentre l'utente scrolla la mappa
