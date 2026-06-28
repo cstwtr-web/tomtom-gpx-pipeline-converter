@@ -471,6 +471,8 @@ async function redoAction() {
 // NOTA: collideva con un omonimo export di task_13. Tenuta questa versione
 // locale su state.getMap()/getRoutePoints()/getWaypoints() con flyToBounds
 // animato + fallback sui waypoint grezzi.
+// Il padding è delegato a _smartPad (via fitMapToBounds di task_13):
+// nessun valore hardcoded qui → unica fonte di verità.
 function fitMapToRoute() {
   const map = state.getMap();
   if (!map) return;
@@ -482,12 +484,21 @@ function fitMapToRoute() {
     const bounds = L.latLngBounds(pts.map(p => [p.lat, p.lon]));
     if (bounds.isValid()) {
       map.invalidateSize();
-      const isMobile = window.matchMedia('(pointer: coarse)').matches;
-      const padV = isMobile ? 48 : 40;
-      const padH = isMobile ? 24 : 20;
-      map.flyToBounds(bounds, { padding: [padV, padH], maxZoom: 14, duration: 0.5 });
+      const pad = _computeSmartPad(map);
+      map.flyToBounds(bounds, { padding: pad, maxZoom: 14, duration: 0.5 });
     }
   } catch (e) {}
+}
+
+// Helper locale — replica la logica di _smartPad da task_13 senza importarla
+// (task_01 non può importare funzioni non-esportate; evita di esporre _smartPad
+//  come export pubblico solo per questo uso).
+function _computeSmartPad(map) {
+  const size  = map.getSize();
+  const RATIO = 0.04, MIN = 12, MAX_V = 28, MAX_H = 20;
+  const padH  = Math.max(MIN, Math.min(MAX_H, Math.round(size.x * RATIO)));
+  const padV  = Math.max(MIN, Math.min(MAX_V, Math.round(size.y * RATIO)));
+  return [padV, padH];
 }
 
 

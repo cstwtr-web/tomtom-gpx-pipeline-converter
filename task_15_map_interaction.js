@@ -17,6 +17,7 @@
 import { $, haversineM } from './task_03_utils.js';
 import {
   initMap as _t13InitMap,
+  fitMapToBounds as _t13FitMapToBounds,
 } from './task_13_map_component.js';
 
 // ── Stato locale del modulo ──────────────────────────────────────────────────
@@ -157,11 +158,8 @@ export function _applyMapView() {
     if (_bounds) {
       try {
         map.invalidateSize();
-        const isMobile = window.matchMedia('(pointer: coarse)').matches;
-        const padV = isMobile ? 48 : 40;
-        const padH = isMobile ? 24 : 20;
         setTimeout(() => {
-          map.fitBounds(_bounds, { padding: [padV, padH], maxZoom: 14 });
+          _t13FitMapToBounds(_bounds);
         }, 60);
       } catch (e) {}
     }

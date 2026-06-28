@@ -121,20 +121,41 @@ export function drawRoute(points, color = '#1e5aa8') {
   _routePolyline = L.polyline(latLngs, { color, weight: 5, opacity: 0.8 }).addTo(_map);
 }
 
+/**
+ * Calcola il padding ottimale per fitBounds in base alle dimensioni reali del container.
+ * Usa il 4% del lato come respiro relativo, con un minimo di 12px e cap
+ * asimmetrico (V ≤ 28px, H ≤ 20px) per massimizzare l'area utile della traccia
+ * indipendentemente dalla geometria del percorso (est-ovest, nord-sud, diagonale).
+ *
+ * Perché cap asimmetrico:
+ *   - padH = 20px coincide col comportamento precedente su desktop (nessuna regressione).
+ *   - padV era 40px: tagliato a 28px elimina lo spreco verticale che penalizzava
+ *     i percorsi orizzontali (padV > padH → Leaflet riduceva lo zoom per rispettare
+ *     il margine verticale, lasciando grandi vuoti ai lati).
+ *
+ * @param {L.Map} map - istanza Leaflet con container già dimensionato
+ * @returns {[number, number]} [padV, padH] in pixel
+ */
+function _smartPad(map) {
+  const size  = map.getSize();           // {x: larghezza px, y: altezza px}
+  const RATIO = 0.04;                    // 4% del lato come respiro relativo
+  const MIN   = 12;                      // minimo assoluto (marker non a filo bordo)
+  const MAX_V = 28;                      // cap verticale ridotto (era 40 → spreco)
+  const MAX_H = 20;                      // cap orizzontale invariato
+
+  const padH = Math.max(MIN, Math.min(MAX_H, Math.round(size.x * RATIO)));
+  const padV = Math.max(MIN, Math.min(MAX_V, Math.round(size.y * RATIO)));
+  return [padV, padH];
+}
+
 export function fitMapToBounds(bounds) {
   if (!_map || !bounds) return;
-  const isMobile = window.matchMedia('(pointer: coarse)').matches;
-  const padV = isMobile ? 48 : 40;
-  const padH = isMobile ? 24 : 20;
-  _map.fitBounds(bounds, { padding: [padV, padH], maxZoom: 14 });
+  _map.fitBounds(bounds, { padding: _smartPad(_map), maxZoom: 14 });
 }
 
 export function fitMapToRoute() {
   if (_routePolyline) {
-    const isMobile = window.matchMedia('(pointer: coarse)').matches;
-    const padV = isMobile ? 48 : 40;
-    const padH = isMobile ? 24 : 20;
-    _map.fitBounds(_routePolyline.getBounds(), { padding: [padV, padH], maxZoom: 14 });
+    _map.fitBounds(_routePolyline.getBounds(), { padding: _smartPad(_map), maxZoom: 14 });
   }
 }
 
