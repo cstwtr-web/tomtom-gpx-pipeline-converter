@@ -125,9 +125,9 @@ export function drawRoute(points, color = '#1e5aa8') {
  * Calcola il padding asimmetrico per fitBounds.
  * La goccia Leaflet si estende 41px SOPRA l'anchor geografico, nulla sotto:
  *   paddingTopLeft     → top=48px (41px goccia + 7px respiro), left=dinamico
- *   paddingBottomRight → bottom=12px (solo respiro minimo),    right=dinamico
- * Questo elimina il 36px di padding inferiore sprecato che riduceva lo zoom
- * sui percorsi nord-sud.
+ *   paddingBottomRight → bottom=32px (20px attribution OSM + 12px respiro), right=dinamico
+ * Il valore bottom è stato alzato da 12 a 32 per evitare che il marker più a
+ * sud venga coperto dalla barra "Leaflet | © OpenStreetMap contributors".
  *
  * @param {L.Map} map
  * @returns {{ paddingTopLeft: L.Point, paddingBottomRight: L.Point }}
@@ -137,7 +137,7 @@ function _smartPad(map) {
   const padH = Math.max(12, Math.min(20, Math.round(size.x * 0.04)));
   return {
     paddingTopLeft:     L.point(padH, 48),   // [left, top]
-    paddingBottomRight: L.point(padH, 12),   // [right, bottom]
+    paddingBottomRight: L.point(padH, 32),   // [right, bottom] — 20px attribution + 12px respiro
   };
 }
 
