@@ -23,6 +23,13 @@ import {
 // ── Stato locale del modulo ──────────────────────────────────────────────────
 let _mapClickModeActive = false;
 
+// Debounce del primo fitBounds: in un singolo go() fullStateRefresh() può
+// essere chiamato 2-3 volte in sequenza (pre-consenso, post-riduzione,
+// post-redistribuzione trkpt). Senza debounce ogni chiamata armava il
+// proprio setTimeout + invalidateSize, causando fit multipli "a scatti"
+// durante il caricamento (FIX rallentamento caricamento mappa).
+let _fitDebounceTimer = null;
+
 // Dipendenze iniettate da initMapInteraction()
 let _state, _addLog, _reverseGeocode, _mapState, _fullStateRefresh, _invalidateWpCache;
 
@@ -140,12 +147,24 @@ export function initMap() {
 //
 // Tre casi, in ordine di priorità:
 //   1. Prima visualizzazione per questa rotta (!_mapState.hasBeenFitted)
-//      → fitBounds completo su tutto il percorso.
+//      → fitBounds completo su tutto il percorso (debounced, vedi sotto).
 //   2. Modifica puntuale in sospeso (_mapState.focusLatLon, impostato da
 //      _insertWaypointAtLatLon o dalla rimozione tappa via marker)
 //      → flyTo dolce su quel punto, MANTENENDO lo zoom corrente dell'utente.
 //   3. Nessuno dei due → non si tocca la view: l'utente resta esattamente
 //      dove si trovava.
+//
+// FIX rallentamento caricamento (debounce primo fit):
+// go() può chiamare fullStateRefresh() 2-3 volte in sequenza nello stesso
+// caricamento (pre-consenso → post-riduzione tappe → post-redistribuzione
+// trkpt). Prima di questo fix, ogni chiamata armava un proprio
+// invalidateSize() doppio + setTimeout(60ms) → fitBounds, quindi la mappa
+// "scattava" più volte con bounds intermedi (calcolati su dati grezzi non
+// ancora definitivi) prima di stabilizzarsi sul fit finale, qualche secondo
+// dopo. Ora _mapState.hasBeenFitted passa a true SOLO quando il fit viene
+// davvero eseguito: se arriva una nuova richiesta di fit mentre la
+// precedente è ancora in coda, quella vecchia viene annullata e si aspetta
+// solo l'ultima (bounds più recenti = quelli giusti).
 export function _applyMapView() {
   const map = _state.getMap();
   if (!map) return;
@@ -153,16 +172,22 @@ export function _applyMapView() {
   map.invalidateSize();
 
   if (!_mapState.hasBeenFitted) {
-    _mapState.hasBeenFitted = true;
     const _bounds = _mapState.pendingBounds;
-    if (_bounds) {
+    if (!_bounds) return; // niente da inquadrare ancora: non segnare hasBeenFitted
+
+    // Annulla un eventuale fit precedente non ancora eseguito: contano solo
+    // i bounds più recenti (es. quelli post-routing OSRM, non quelli grezzi
+    // pre-routing usati per il primo render provvisorio).
+    if (_fitDebounceTimer) clearTimeout(_fitDebounceTimer);
+
+    _fitDebounceTimer = setTimeout(() => {
+      _fitDebounceTimer = null;
+      _mapState.hasBeenFitted = true;
       try {
         map.invalidateSize();
-        setTimeout(() => {
-          _t13FitMapToBounds(_bounds);
-        }, 60);
+        _t13FitMapToBounds(_mapState.pendingBounds);
       } catch (e) {}
-    }
+    }, 60);
   } else if (_mapState.focusLatLon) {
     const { lat, lon, zoom } = _mapState.focusLatLon;
     _mapState.focusLatLon = null;
