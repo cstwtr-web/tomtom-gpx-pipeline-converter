@@ -378,9 +378,6 @@ function _rcUpdateBottomSheet(map, sheet) {
         cancelButtonColor: '#6b7280',
       });
       if (!isConfirmed) return;
-      _rcRemoveBottomSheet(map);
-      _rcRemoveCrosshair();
-      toggleMapClickMode(true);
       const updated = _state.getWaypoints().filter((_, i) => i !== idx);
       _state.setWaypoints(updated);
       _state.pushSnapshot(`Tappa rimossa dalla mappa: "${w.name || labelFin}"`, { manual: true });
@@ -389,6 +386,11 @@ function _rcUpdateBottomSheet(map, sheet) {
       const zoom = _state.getMap()?.getZoom();
       _mapState.focusLatLon = { lat: w.lat, lon: w.lon, zoom };
       await _fullStateRefresh();
+      // Resta in edit mode: ripristina crosshair + sheet per operazione successiva
+      if (_mapClickModeActive) {
+        const m = _state.getMap();
+        if (m) { _rcShowCrosshair(); _rcShowBottomSheet(m); }
+      }
     });
   }
 
