@@ -18,6 +18,8 @@ import { $, haversineM } from './task_03_utils.js';
 import {
   initMap as _t13InitMap,
   fitMapToBounds as _t13FitMapToBounds,
+  enableLongPress as _t13EnableLongPress,
+  disableLongPress as _t13DisableLongPress,
 } from './task_13_map_component.js';
 
 // ── Stato locale del modulo ──────────────────────────────────────────────────
@@ -267,6 +269,119 @@ function _rcRemoveCrosshair() {
   document.getElementById('rc-crosshair')?.remove();
 }
 
+// ── Soglia prossimità crosshair→marker per mostrare il bottone Elimina ─────
+// 40m: abbastanza ampia da essere usabile con dito su mobile,
+// abbastanza stretta da non attivarsi per errore su tappe vicine.
+const _PROXIMITY_M = 40;
+
+// Restituisce l'indice del waypoint più vicino al centro mappa se entro soglia,
+// altrimenti null. Usata da _rcUpdateBottomSheet() per context-switch UI.
+function _nearestWpIdx(map) {
+  const wps = _state.getWaypoints();
+  if (!wps || wps.length <= 2) return null;  // almeno 3 tappe per poterne eliminare una
+  const center = map.getCenter();
+  let minDist = Infinity, minIdx = null;
+  for (let i = 0; i < wps.length; i++) {
+    const d = haversineM(
+      { lat: center.lat, lon: center.lng },
+      { lat: wps[i].lat, lon: wps[i].lon }
+    );
+    if (d < minDist) { minDist = d; minIdx = i; }
+  }
+  return minDist <= _PROXIMITY_M ? minIdx : null;
+}
+
+// Aggiorna il contenuto del bottom sheet in base alla prossimità ai marker.
+// Chiamata ad ogni evento 'move' della mappa: deve essere leggera.
+function _rcUpdateBottomSheet(map, sheet) {
+  const btnRow = sheet.querySelector('#rc-sheet-btn-row');
+  if (!btnRow) return;
+
+  const nearIdx = _nearestWpIdx(map);
+  const wps     = _state.getWaypoints();
+
+  if (nearIdx !== null) {
+    // ── Modalità ELIMINA: crosshair vicino a un marker ───────────────────────
+    const wp       = wps[nearIdx];
+    const roleStr  = nearIdx === 0 ? 'Partenza' : nearIdx === wps.length - 1 ? 'Arrivo' : 'Tappa';
+    const label    = `${nearIdx + 1} — ${roleStr}`;
+    const nameDisp = wp.name ? `"${wp.name}"` : label;
+    btnRow.innerHTML = `
+      <button id="rc-sheet-delete"
+        style="flex:1;background:#e53e3e;color:#fff;border:none;border-radius:10px;
+               padding:8px 8px;cursor:pointer;font-size:13px;font-weight:700;line-height:1.3;
+               touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+               box-shadow:0 2px 8px rgba(229,62,62,.35);">
+        🗑️ Elimina tappa
+        <div style="font-weight:400;font-size:10px;opacity:.9;margin-top:1px;">${nameDisp}</div>
+      </button>`;
+
+    btnRow.querySelector('#rc-sheet-delete').addEventListener('click', async () => {
+      _rcRemoveBottomSheet(map);
+      _rcRemoveCrosshair();
+      toggleMapClickMode(true);   // esci da edit mode prima del Swal
+      const wpsNow = _state.getWaypoints();
+      const w      = wpsNow[nearIdx];
+      if (!w) return;
+      const roleFin  = nearIdx === 0 ? 'Partenza' : nearIdx === wpsNow.length - 1 ? 'Arrivo' : 'Tappa';
+      const labelFin = `${nearIdx + 1} — ${roleFin}`;
+      const { isConfirmed } = await window.Swal.fire({
+        icon: 'warning',
+        title: `Rimuovere "${w.name || labelFin}"?`,
+        html: `<span style="color:#6b7280;font-size:13px;">${labelFin}</span>`,
+        showCancelButton: true,
+        confirmButtonText: '🗑️ Rimuovi',
+        cancelButtonText: 'Annulla',
+        confirmButtonColor: '#e53e3e',
+        cancelButtonColor: '#6b7280',
+      });
+      if (!isConfirmed) return;
+      const updated = _state.getWaypoints().filter((_, i) => i !== nearIdx);
+      _state.setWaypoints(updated);
+      _state.pushSnapshot(`Tappa rimossa dalla mappa: "${w.name || labelFin}"`, { manual: true });
+      _invalidateWpCache('rimozione tappa da crosshair');
+      _addLog(`🗑️ Tappa rimossa: "${w.name || labelFin}"`, 'ok');
+      const zoom = _state.getMap()?.getZoom();
+      _mapState.focusLatLon = { lat: w.lat, lon: w.lon, zoom };
+      await _fullStateRefresh();
+    });
+
+  } else {
+    // ── Modalità AGGIUNGI: crosshair su spazio vuoto (comportamento originale) ─
+    btnRow.innerHTML = `
+      <button id="rc-sheet-exact"
+        style="flex:1;background:#10b981;color:#fff;border:none;border-radius:10px;
+               padding:8px 8px;cursor:pointer;font-size:13px;font-weight:700;line-height:1.3;
+               touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+               box-shadow:0 2px 8px rgba(16,185,129,.3);">
+        📍 Aggiungi tappa
+        <div style="font-weight:400;font-size:10px;opacity:.85;margin-top:1px;">no snap</div>
+      </button>
+      <button id="rc-sheet-snap"
+        style="flex:1;background:var(--p);color:#fff;border:none;border-radius:10px;
+               padding:8px 8px;cursor:pointer;font-size:13px;font-weight:700;line-height:1.3;
+               touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+               box-shadow:0 2px 8px rgba(30,90,168,.3);">
+        🔗 Tappa intermedia
+        <div style="font-weight:400;font-size:10px;opacity:.85;margin-top:1px;">snap strada</div>
+      </button>`;
+
+    btnRow.querySelector('#rc-sheet-snap').addEventListener('click', async () => {
+      const center = map.getCenter();
+      _rcRemoveBottomSheet(map);
+      _rcRemoveCrosshair();
+      await _insertWaypointAtLatLon(center.lat, center.lng, false);
+    });
+
+    btnRow.querySelector('#rc-sheet-exact').addEventListener('click', async () => {
+      const center = map.getCenter();
+      _rcRemoveBottomSheet(map);
+      _rcRemoveCrosshair();
+      await _insertWaypointAtLatLon(center.lat, center.lng, true);
+    });
+  }
+}
+
 function _rcShowBottomSheet(map) {
   let sheet = document.getElementById('rc-bottom-sheet');
   if (sheet) return;   // già presente
@@ -297,64 +412,28 @@ function _rcShowBottomSheet(map) {
         ${lat.toFixed(5)}, ${lng.toFixed(5)}
       </div>
     </div>
-    <div style="display:flex;gap:8px;">
-      <button id="rc-sheet-exact"
-        style="flex:1;background:#10b981;color:#fff;border:none;border-radius:10px;
-               padding:8px 8px;cursor:pointer;font-size:13px;font-weight:700;line-height:1.3;
-               touch-action:manipulation;-webkit-tap-highlight-color:transparent;
-               box-shadow:0 2px 8px rgba(16,185,129,.3);">
-        📍 Aggiungi tappa
-        <div style="font-weight:400;font-size:10px;opacity:.85;margin-top:1px;">no snap</div>
-      </button>
-      <button id="rc-sheet-snap"
-        style="flex:1;background:var(--p);color:#fff;border:none;border-radius:10px;
-               padding:8px 8px;cursor:pointer;font-size:13px;font-weight:700;line-height:1.3;
-               touch-action:manipulation;-webkit-tap-highlight-color:transparent;
-               box-shadow:0 2px 8px rgba(30,90,168,.3);">
-        🔗 Tappa intermedia
-        <div style="font-weight:400;font-size:10px;opacity:.85;margin-top:1px;">snap strada</div>
-      </button>
-    </div>`;
+    <div id="rc-sheet-btn-row" style="display:flex;gap:8px;"></div>`;
 
   document.body.appendChild(sheet);
 
-  // FIX STRUTTURALE: il sheet è position:fixed/bottom:0 (ancorato al
-  // viewport), mentre "Centra mappa"/"Confronta traccia" sono nel flusso
-  // normale del documento (#map-bottom-right-row, FUORI da #mapPreview).
-  // Sono due sistemi di coordinate indipendenti: ridurre solo l'altezza del
-  // sheet attenua la sovrapposizione ma non la elimina, perché con uno
-  // scroll diverso il bottone può comunque ricadere nella fascia di schermo
-  // coperta dal sheet. La soluzione robusta è riservare nel documento, sotto
-  // la mappa, uno spazio pari all'altezza REALE del sheet (misurata a runtime
-  // via offsetHeight, non stimata) — così il bottone viene sempre spinto
-  // sopra la zona "fixed", indipendentemente da come si scrolla.
+  // Rendering iniziale bottoni
+  _rcUpdateBottomSheet(map, sheet);
+
+  // FIX STRUTTURALE: spazio riservato sotto la mappa per evitare sovrapposizione
   requestAnimationFrame(() => {
     const row = document.getElementById('map-bottom-right-row');
     if (row) row.style.marginBottom = sheet.offsetHeight + 'px';
   });
 
-  // Aggiorna coordinate live mentre l'utente scrolla la mappa
+  // Aggiorna coordinate live + context bottoni mentre l'utente scrolla
   const _onMove = () => {
-    const c = map.getCenter();
+    const c  = map.getCenter();
     const el = document.getElementById('rc-sheet-coords');
     if (el) el.textContent = `${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}`;
+    _rcUpdateBottomSheet(map, sheet);
   };
   map.on('move', _onMove);
   sheet._rcMoveHandler = _onMove;
-
-  sheet.querySelector('#rc-sheet-snap').addEventListener('click', async () => {
-    const center = map.getCenter();
-    _rcRemoveBottomSheet(map);
-    _rcRemoveCrosshair();
-    await _insertWaypointAtLatLon(center.lat, center.lng, false);
-  });
-
-  sheet.querySelector('#rc-sheet-exact').addEventListener('click', async () => {
-    const center = map.getCenter();
-    _rcRemoveBottomSheet(map);
-    _rcRemoveCrosshair();
-    await _insertWaypointAtLatLon(center.lat, center.lng, true);
-  });
 }
 
 function _rcRemoveBottomSheet(map) {
@@ -398,6 +477,7 @@ export function toggleMapClickMode(forceOff = false) {
       // si usa map.getCenter() dai bottoni del bottom sheet.
       // Il vecchio handler rimane attivo ma non fa nulla di visivo (no popup custom).
     }
+    _t13EnableLongPress();   // FIX A: abilita long-press sui marker ora che siamo in edit
 
     if (!toggleMapClickMode._escHandler) {
       toggleMapClickMode._escHandler = (e) => {
@@ -410,6 +490,7 @@ export function toggleMapClickMode(forceOff = false) {
     _rcCloseCustomPanel();
     _rcRemoveCrosshair();
     if (map) _rcRemoveBottomSheet(map);
+    _t13DisableLongPress();   // FIX A: disabilita long-press sui marker uscendo da edit
     if (btn)    { btn.style.background = '#fff'; btn.style.color = '#444'; btn.style.borderColor = 'rgba(0,0,0,0.25)'; btn.setAttribute('aria-pressed', 'false'); btn.title = 'Modifica percorso sulla mappa'; }
     if (icon)   icon.textContent = '✏️';
     if (label)  label.textContent = 'Modifica percorso';

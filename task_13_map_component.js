@@ -201,6 +201,13 @@ export function fitMapToRoute() {
  */
 export function getSmartPad(map) { return _smartPad(map); }
 
+// Guard: se true, il long-press sui marker è abilitato (solo in modalità edit).
+// Settato via enableLongPress()/disableLongPress() da task_15/task_01.
+let _longPressEnabled = false;
+
+export function enableLongPress()  { _longPressEnabled = true; }
+export function disableLongPress() { _longPressEnabled = false; }
+
 export function renderWaypoints(wps, onMarkerDragEnd, callbacks = {}) {
   // Difesa: se _markerGroup è stato rimosso dalla mappa, lo re-aggancia
   if (_map && _markerGroup && !_map.hasLayer(_markerGroup)) {
@@ -240,6 +247,7 @@ export function renderWaypoints(wps, onMarkerDragEnd, callbacks = {}) {
         if (oe.button !== 0) return;
         _lpTimer = setTimeout(async () => {
           _lpTimer = null;
+          if (!_longPressEnabled) return;   // FIX A: guard — solo in modalità edit
           marker.closePopup();
           _map.closePopup();
           marker.once('click', (e) => { L.DomEvent.stopPropagation(e); });
@@ -265,6 +273,7 @@ export function renderWaypoints(wps, onMarkerDragEnd, callbacks = {}) {
             e.preventDefault();
             _lpTimer = setTimeout(async () => {
               _lpTimer = null;
+              if (!_longPressEnabled) return;   // FIX A: guard — solo in modalità edit
               marker.closePopup();
               _map.closePopup();
               marker.once('click', (ev2) => { L.DomEvent.stopPropagation(ev2); });
@@ -284,7 +293,7 @@ export function renderWaypoints(wps, onMarkerDragEnd, callbacks = {}) {
     }
 
     const hintHtml = wps.length > 2 && callbacks.onLongPress
-      ? `<div style="margin-top:6px;font-size:10px;color:#9ca3af;border-top:1px solid #f3f4f6;padding-top:5px;">🖐️ Tieni premuto per rimuovere</div>`
+      ? `<div style="margin-top:6px;font-size:10px;color:#9ca3af;border-top:1px solid #f3f4f6;padding-top:5px;">🖐️ Tieni premuto (in modalità modifica) per rimuovere</div>`
       : '';
 
     marker.bindPopup(
