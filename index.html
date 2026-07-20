@@ -367,6 +367,21 @@ outline: none;
 }
 @media (min-width: 640px) { #dashboard { gap: 24px; } }
 
+/* ── Grafico altimetrico (task_18) ── */
+#altitudeChartCard.hidden { display: none; }
+#altitudeChartCard { padding: clamp(12px,3vw,16px); }
+.rc-alt-stats {
+  display: flex; flex-wrap: wrap; gap: 6px 14px;
+  font-size: clamp(11px,2.2vw,12.5px); font-weight: 600; color: var(--p);
+  margin-bottom: 8px;
+}
+.rc-alt-svg { width: 100%; height: 140px; display: block; cursor: crosshair; touch-action: none; }
+.rc-alt-area { fill: var(--p-light); stroke: none; }
+.rc-alt-line { fill: none; stroke: var(--p); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.rc-alt-hover-line { stroke: var(--warning); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.rc-alt-hover-dot  { fill: var(--warning); stroke: #fff; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.rc-alt-hidden { display: none; }
+
 
 /* ── Desktop two-column layout (v18.0) ──────────────────────────────────── */
 /* Approccio corretto: due wrapper HTML #leftCol + #rightCol              */
@@ -1060,6 +1075,8 @@ Fatto questo, la puoi usare più volte sul tuo navigatore e su quelli di altri, 
   <span id="statTime" style="font-weight:700;">—</span>
   <span id="db-mydrive">—</span>
 </div>
+<!-- ── Grafico altimetrico (task_18) — nascosto finché non ci sono quote ── -->
+<div id="altitudeChartCard" class="card hidden"></div>
 </div><!-- /#leftCol -->
 <div id="rightCol">
 <!-- ── Pannello decisionale (Fase 3 + Fase 4) ── -->
