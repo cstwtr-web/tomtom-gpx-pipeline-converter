@@ -194,7 +194,7 @@ export function buildITNString(wps) {
 //          informativa (commento XML / description) SOLO se >0. buildITNString invariata
 //          e non tocca fallbackCount: il Rider ricalcola le strade, non serve avviso.
 // [TEST] Copertura in test_08_export.js — rilanciare dopo ogni modifica a questo file (node test_08_export.js)
-// [FIX_ELE_1] buildKMLString: linePlacemark usa p.ele ?? 0 invece di ",0" hardcoded.
+// [FIX_ELE_1] v23.0 — buildKMLString: linePlacemark usa p.ele ?? 0 invece di ",0" hardcoded.
 //             wpPlacemarks ora usa uno snap-lookup (snappedWps) identico nello spirito
 //             a quello già presente in buildGPXString, per coerenza di quota E posizione
 //             KML↔GPX. Nessuna modifica a buildGPXString/buildITNString.

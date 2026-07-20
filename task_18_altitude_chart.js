@@ -1,4 +1,4 @@
-// task_18_altitude_chart.js
+// task_18_altitude_chart.js — v23.0
 // Grafico altimetrico (distanza/quota) — SVG disegnato a mano, nessuna nuova
 // dipendenza CDN. Decisione architetturale validata: Chart.js non è mai stato
 // caricato nel progetto (solo SweetAlert2/JSZip/Leaflet in index.html) e non
@@ -205,3 +205,5 @@ export function onMapHoverLatLng(latlng) {
   }
   _setHoverAt(bestIdx);
 }
+
+// [CHECKP_TASK_10] hash: v23.0_altitude_chart_svg

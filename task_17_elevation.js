@@ -1,4 +1,4 @@
-// task_17_elevation.js
+// task_17_elevation.js — v23.0
 // Arricchimento quota (elevazione) per routePoints via Open-Elevation.
 // Funzioni pure + un solo punto di aggancio a state (initElevationEnrichment).
 // Nessun DOM, nessuna variabile globale al di fuori del modulo stesso.
@@ -149,3 +149,5 @@ export function initElevationEnrichment({ state, addLog }) {
 // non da chunking. Se in pratica emergono timeout frequenti su tracce lunghe,
 // segnalarlo esplicitamente prima di aggiungere chunking (sarebbe una
 // modifica architetturale, non va decisa silenziosamente qui).
+
+// [CHECKP_TASK_09] hash: v23.0_elevation_enrichment

@@ -869,3 +869,4 @@ if (document.readyState === 'loading') {
 //          stesso ciclo di vita di fullStateRefresh()→updateDashboard(), degrado silenzioso
 //          se le quote non sono disponibili. Nessuna modifica a routing/pruning/DP/export
 //          oltre al fix mirato già descritto in task_08_export.js.
+// [CHECKP_TASK_09] hash: v23.0_elevation_altitude_chart

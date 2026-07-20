@@ -328,3 +328,9 @@ export function renderWaypoints(wps, onMarkerDragEnd, callbacks = {}) {
     _markerGroup.addLayer(marker);
   });
 }
+
+// [CHECKP_TASK_10] hash: v23.0_altitude_hover_sync
+// [ELEVAZIONE+GRAFICO] v23.0: aggiunte showHoverMarker/hideHoverMarker/onPolylineHover +
+//          listener mousemove/mouseout sulla polyline in drawRoute() per il sync col
+//          grafico altimetrico (task_18). Additivo puro: nessuna riga toccata della
+//          logica esistente di marker/drag/eliminazione tappe.
