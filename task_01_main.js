@@ -670,7 +670,7 @@ async function boot() {
   // Copre tutti i punti di uscita del routing (fast-path Garmin, fast-path
   // trkpt, _applyRoute OSRM/Valhalla, rollback deleteWaypoint in task_11) senza
   // hook duplicati nei singoli call-site. Va registrato una sola volta qui.
-  initElevationEnrichment({ state, addLog });
+  initElevationEnrichment({ state, addLog, onEnriched: updateDashboard });
 
   // ── Sync hover mappa→grafico altimetrico (task_18) ──────────────────────
   // Le firme combaciano già ({lat,lon}|null): nessuna conversione necessaria.
@@ -863,10 +863,15 @@ if (document.readyState === 'loading') {
 //          finiva sulla destinazione scelta dall'utente). Caso A (Tentativo 0 riuscito) e Caso 1
 //          (annullamento volontario) restano silenziosi by design.
 // [CHECKP_TASK_08] hash: v22.12_export_feedback_rewrite
-// [ELEVAZIONE+GRAFICO] boot(): initElevationEnrichment({state,addLog}) — unico state.subscribe
-//          su 'routePoints' (task_17). onPolylineHover(onMapHoverLatLng) — sync hover
-//          mappa→grafico (task_18). updateDashboard(): renderAltitudeChart() integrato nello
-//          stesso ciclo di vita di fullStateRefresh()→updateDashboard(), degrado silenzioso
-//          se le quote non sono disponibili. Nessuna modifica a routing/pruning/DP/export
-//          oltre al fix mirato già descritto in task_08_export.js.
+// [ELEVAZIONE+GRAFICO] boot(): initElevationEnrichment({state,addLog,onEnriched:updateDashboard})
+//          — unico state.subscribe su 'routePoints' (task_17). onPolylineHover(onMapHoverLatLng)
+//          — sync hover mappa→grafico (task_18). updateDashboard(): renderAltitudeChart()
+//          integrato nello stesso ciclo di vita di fullStateRefresh()→updateDashboard(),
+//          degrado silenzioso se le quote non sono disponibili. Nessuna modifica a
+//          routing/pruning/DP/export oltre al fix mirato già descritto in task_08_export.js.
+// [FIX_ELE_2] v23.0.1 — BUG: il grafico non appariva mai. L'arricchimento quota è
+//          asincrono e finisce DOPO che fullStateRefresh()/updateDashboard() sono già
+//          stati eseguiti dal flusso di routing: state.setRoutePoints(enriched) aggiornava
+//          lo stato ma nessuno ridisegnava più dashboard/grafico. Aggiunta callback
+//          onEnriched → updateDashboard, richiamata da task_17 solo a arricchimento riuscito.
 // [CHECKP_TASK_09] hash: v23.0_elevation_altitude_chart

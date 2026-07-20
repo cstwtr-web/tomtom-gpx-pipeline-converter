@@ -85,7 +85,13 @@ export async function enrichElevation(points, signal, { addLog } = {}) {
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
       elevations = await _fetchElevations(points, signal);
     }
-    return points.map((p, i) => ({ ...p, ele: elevations[i] }));
+    const result = points.map((p, i) => ({ ...p, ele: elevations[i] }));
+    const validEle = elevations.filter(e => typeof e === 'number' && !isNaN(e));
+    const rangeStr = validEle.length > 0
+      ? `${Math.round(Math.min(...validEle))}–${Math.round(Math.max(...validEle))} m`
+      : 'n/d';
+    addLog?.(`✅ Quote elevazione ricevute: ${result.length} punti (${rangeStr})`, 'ok');
+    return result;
   } catch (err) {
     if (err.name === 'AbortError') throw err;
     // Fallimento non bloccante: nessuna quota, ma l'app continua a funzionare.
@@ -116,7 +122,17 @@ export async function enrichElevation(points, signal, { addLog } = {}) {
  *
  * @param {{state:object, addLog?:Function}} deps
  */
-export function initElevationEnrichment({ state, addLog }) {
+/**
+ * @param {{state:object, addLog?:Function, onEnriched?:Function}} deps
+ *   onEnriched() - richiamata DOPO state.setRoutePoints(enriched), quando
+ *   l'arricchimento ha successo. Necessaria perché l'arricchimento è
+ *   asincrono e finisce DOPO che fullStateRefresh()/updateDashboard() sono
+ *   già stati eseguiti dal flusso di routing: senza questa callback lo
+ *   stato viene aggiornato ma nessuno ridisegna dashboard/grafico
+ *   altimetrico con le quote appena arrivate. Va agganciata in boot() a
+ *   updateDashboard() (o equivalente).
+ */
+export function initElevationEnrichment({ state, addLog, onEnriched }) {
   let _controller = null;
 
   state.subscribe(async (event, pts) => {
@@ -133,6 +149,7 @@ export function initElevationEnrichment({ state, addLog }) {
       if (_controller !== controller) return;               // superato da un evento 'routePoints' più recente
       if (state.getRoutePoints() !== pts) return;            // routePoints è già cambiato altrove nel frattempo
       state.setRoutePoints(enriched); // ri-emette 'routePoints' con ele[0] definito → il guard blocca il loop
+      if (enriched[0]?.ele !== undefined) onEnriched?.(); // avvisa la UI: solo se l'arricchimento è riuscito davvero
     } catch (err) {
       if (err.name !== 'AbortError') addLog?.(`⚠️ Arricchimento quota interrotto: ${err.message}`, 'warn');
     } finally {
