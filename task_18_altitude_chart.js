@@ -243,14 +243,40 @@ export function renderAltitudeChart(container, points, mapSync = {}) {
     return bestIdx;
   }
 
-  svg.addEventListener('mousemove', (e) => {
-    const idx = _idxAtClientX(e.clientX);
+  function _updateHoverFromClientX(clientX) {
+    const idx = _idxAtClientX(clientX);
     const p = _setHoverAt(idx);
     if (p) mapSync.showHoverMarker?.({ lat: p.lat, lon: p.lon });
-  });
-  svg.addEventListener('mouseleave', () => {
+  }
+  function _clearHoverAndMap() {
     _clearHover();
     mapSync.hideHoverMarker?.();
+  }
+
+  // Pointer Events invece di mouse*: unificano mouse/touch/penna in un solo
+  // set di listener, ma soprattutto risolvono il problema del "riscontro
+  // statico" su touch — 'mousemove' non scatta affatto mentre il dito
+  // scorre sullo schermo (al massimo un evento sintetico isolato dopo il
+  // rilascio), mentre 'pointermove' scatta CONTINUAMENTE:
+  //  - mouse: in hover, bottone non necessario (comportamento identico a prima)
+  //  - touch: solo mentre il dito resta a contatto — è esattamente il
+  //    "sposto il dito e vedo il puntino seguire in tempo reale" richiesto.
+  // setPointerCapture in pointerdown mantiene il tracking anche se il dito
+  // scivola leggermente fuori dai bordi esatti dell'SVG durante il trascinamento
+  // (senza capture, uscire anche di 1px interromperebbe l'aggiornamento).
+  svg.addEventListener('pointerdown', (e) => {
+    svg.setPointerCapture(e.pointerId);
+    _updateHoverFromClientX(e.clientX);
+  });
+  svg.addEventListener('pointermove', (e) => {
+    _updateHoverFromClientX(e.clientX);
+  });
+  svg.addEventListener('pointerup', _clearHoverAndMap);
+  svg.addEventListener('pointercancel', _clearHoverAndMap);
+  svg.addEventListener('pointerleave', (e) => {
+    // Solo per il mouse: col touch il pointer capture mantiene il tracking
+    // fino al pointerup anche se il dito esce dai bordi dell'SVG durante il drag.
+    if (e.pointerType === 'mouse') _clearHoverAndMap();
   });
 }
 
