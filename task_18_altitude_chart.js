@@ -19,11 +19,49 @@
 import { haversineM } from './task_03_utils.js';
 
 const CHART_W = 600;
-const CHART_H = 150;
-const PAD_L   = 4;
-const PAD_R   = 4;
-const PAD_T   = 10;
-const PAD_B   = 4;
+const CHART_H = 140;
+// Margini minimi DENTRO l'SVG (solo per non tagliare lo stroke ai bordi).
+// Le etichette degli assi NON vivono qui dentro: sono <div> HTML posizionati
+// in percentuale accanto/sotto l'SVG — vedi nota su preserveAspectRatio più giù.
+const PAD_L = 2;
+const PAD_R = 2;
+const PAD_T = 6;
+const PAD_B = 2;
+
+// ── Tick "nice" per gli assi ──────────────────────────────────────────────────
+// Restituisce uno step "rotondo" (1/2/5 × 10^n) per un range dato, mirando a
+// circa targetTicks intervalli — stesso algoritmo usato da qualunque libreria
+// di charting per evitare tick tipo "37.4, 74.8, 112.2".
+function _niceStep(range, targetTicks) {
+  if (!(range > 0)) return 1;
+  const rawStep = range / targetTicks;
+  const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const norm = rawStep / mag;
+  const step = norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10;
+  return step * mag;
+}
+
+// Tick equispaziati [0, step, 2*step, ...] entro [0, max] (l'asse km parte
+// sempre da 0, non serve gestire un min diverso da zero).
+function _ticksFromZero(max, targetTicks) {
+  if (!(max > 0)) return [0];
+  const step = _niceStep(max, targetTicks);
+  const ticks = [0];
+  for (let v = step; v <= max + step * 1e-6; v += step) ticks.push(Math.round(v * 1000) / 1000);
+  return ticks;
+}
+
+// Tick equispaziati per un range [min, max] arbitrario (asse quota): parte dal
+// primo multiplo dello step ≥ min, così le etichette restano leggibili (es.
+// 200, 250, 300 m) invece di iniziare dal valore esatto di minEle.
+function _ticksFromRange(min, max, targetTicks) {
+  const step = _niceStep(max - min, targetTicks);
+  const start = Math.ceil(min / step) * step;
+  const ticks = [];
+  for (let v = start; v <= max + step * 1e-6; v += step) ticks.push(Math.round(v * 1000) / 1000);
+  if (ticks.length === 0) ticks.push(Math.round((min + max) / 2));
+  return ticks;
+}
 
 // ── Statistiche derivate ─────────────────────────────────────────────────────
 /**
@@ -141,6 +179,30 @@ export function renderAltitudeChart(container, points, mapSync = {}) {
   const areaPath = `M${xScale(0).toFixed(1)},${baseline} L${linePts.join(' L')} L${xScale(stats.totalDist).toFixed(1)},${baseline} Z`;
   const linePath = `M${linePts.join(' L')}`;
 
+  // ── Asse Y (quota, m) — righe di griglia dentro l'SVG (linee dritte: non
+  // risentono della deformazione di preserveAspectRatio="none"), etichette
+  // testuali fuori dall'SVG come <span> assoluti in percentuale d'altezza.
+  const yTicks = _ticksFromRange(stats.minEle, stats.maxEle, 4);
+  const gridLines = yTicks.map(v =>
+    `<line class="rc-alt-grid" x1="0" y1="${yScale(v).toFixed(1)}" x2="${CHART_W}" y2="${yScale(v).toFixed(1)}"></line>`
+  ).join('');
+  const yLabels = yTicks.map(v => {
+    const topPct = ((yScale(v) / CHART_H) * 100).toFixed(2);
+    return `<span class="rc-alt-ytick" style="top:${topPct}%">${Math.round(v)} m</span>`;
+  }).join('');
+
+  // ── Asse X (distanza, km) — etichette come <span> assoluti in percentuale
+  // di larghezza, sotto l'SVG. totalDist è in metri → conversione a km qui.
+  const totalKm = stats.totalDist / 1000;
+  const xTicksKm = _ticksFromZero(totalKm, 5);
+  const xLabels = xTicksKm.map((km, i) => {
+    const leftPct = ((xScale(km * 1000) / CHART_W) * 100).toFixed(2);
+    // Clamp ai bordi: il primo tick (0) e l'ultimo non devono sforare fuori
+    // dal contenitore per via del transform di centratura.
+    const align = i === 0 ? 'left' : (i === xTicksKm.length - 1 ? 'right' : 'center');
+    return `<span class="rc-alt-xtick rc-alt-xtick--${align}" style="left:${leftPct}%">${km} km</span>`;
+  }).join('');
+
   container.innerHTML = `
     <div class="sec-label">Profilo altimetrico</div>
     <div class="rc-alt-stats">
@@ -150,12 +212,19 @@ export function renderAltitudeChart(container, points, mapSync = {}) {
       <span title="Pendenza massima">⛰️ ${stats.maxGradePct.toFixed(1)}% max</span>
       <span title="Quota min/max">${Math.round(stats.minEle)}–${Math.round(stats.maxEle)} m</span>
     </div>
-    <svg class="rc-alt-svg" viewBox="0 0 ${CHART_W} ${CHART_H}" preserveAspectRatio="none">
-      <path class="rc-alt-area" d="${areaPath}"></path>
-      <path class="rc-alt-line" d="${linePath}"></path>
-      <line class="rc-alt-hover-line rc-alt-hidden" x1="0" y1="${PAD_T}" x2="0" y2="${baseline}"></line>
-      <circle class="rc-alt-hover-dot rc-alt-hidden" r="4"></circle>
-    </svg>`;
+    <div class="rc-alt-chart">
+      <div class="rc-alt-yaxis">${yLabels}</div>
+      <div class="rc-alt-plotwrap">
+        <svg class="rc-alt-svg" viewBox="0 0 ${CHART_W} ${CHART_H}" preserveAspectRatio="none">
+          ${gridLines}
+          <path class="rc-alt-area" d="${areaPath}"></path>
+          <path class="rc-alt-line" d="${linePath}"></path>
+          <line class="rc-alt-hover-line rc-alt-hidden" x1="0" y1="${PAD_T}" x2="0" y2="${baseline}"></line>
+          <circle class="rc-alt-hover-dot rc-alt-hidden" r="4"></circle>
+        </svg>
+        <div class="rc-alt-xaxis">${xLabels}</div>
+      </div>
+    </div>`;
 
   const svg       = container.querySelector('.rc-alt-svg');
   const hoverLine = container.querySelector('.rc-alt-hover-line');
