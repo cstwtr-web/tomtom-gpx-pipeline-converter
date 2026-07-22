@@ -1301,6 +1301,14 @@ Fatto questo, la puoi usare più volte sul tuo navigatore e su quelli di altri, 
   window.addEventListener('resize', scheduleSync);
   window.addEventListener('load', scheduleSync);
   document.addEventListener('DOMContentLoaded', scheduleSync);
+  // FIX: #rightCol è sticky, quindi la posizione a schermo di .wp-list
+  // cambia continuamente durante lo scroll (si "aggancia" più in alto
+  // man mano che si scorre, liberando spazio sotto). Senza questo
+  // listener l'altezza restava congelata al primo calcolo e si
+  // aggiornava solo per caso (es. durante l'animazione di "Centra
+  // mappa", che genera comunque mutazioni sul DOM della mappa) — con
+  // salti di righe che non avevano relazione con l'azione dell'utente.
+  window.addEventListener('scroll', scheduleSync, { passive: true });
 
   var rightCol = document.getElementById('rightCol');
   if(rightCol){
