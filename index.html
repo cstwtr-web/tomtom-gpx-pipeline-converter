@@ -451,8 +451,10 @@ outline: none;
     min-height: 320px;
   }
 
-  /* Lista tappe: scroll interno proporzionale alla viewport */
-  .wp-list { max-height: calc(100dvh - 580px); min-height: 120px; }
+  /* Lista tappe: fallback statico (usato solo se JS non è disponibile).
+     L'altezza reale viene ricalcolata dinamicamente da syncWpListHeight()
+     in base allo spazio libero fino al fondo della viewport. */
+  .wp-list { max-height: calc(100dvh - 300px); min-height: 220px; }
 }
 
 /* ── Pulsanti Undo / Redo — stile toolbar Word, sempre nella riga principale ── */
@@ -1264,6 +1266,61 @@ Fatto questo, la puoi usare più volte sul tuo navigatore e su quelli di altri, 
 </main>
 </div>
 <script type="module" src="task_01_main.js"></script>
+
+<!-- ── FIX: altezza dinamica lista tappe su desktop (v24.0) ──────────────
+     Prima: max-height fisso (100dvh - 580px) → su monitor grandi restavano
+     visibili solo ~2 tappe, con spazio vuoto sotto la lista.
+     Ora: la lista si allunga fino al fondo della viewport, ricalcolando
+     lo spazio libero reale ogni volta che cambia (resize finestra,
+     apertura/chiusura pannelli, nuovo percorso elaborato). Il vecchio
+     valore fisso resta solo come fallback CSS se JS non parte.
+     Su smartphone (<1024px) non fa nulla: la lista mobile usa l'accordion
+     esistente (#wpList-wrap.open, max-height:2000px), invariato. -->
+<script>
+(function(){
+  function syncWpListHeight(){
+    var wpList = document.querySelector('.wp-list');
+    if(!wpList) return;
+    if(!window.matchMedia('(min-width: 1024px)').matches){
+      wpList.style.maxHeight = ''; // torna al comportamento mobile di default
+      return;
+    }
+    var top = wpList.getBoundingClientRect().top;
+    var bottomMargin = 24; // respiro sotto la lista prima del fondo pagina
+    var minHeight = 220;   // ~ altezza di 4 tappe, mai più piccola di così
+    var available = window.innerHeight - top - bottomMargin;
+    wpList.style.maxHeight = Math.max(minHeight, available) + 'px';
+  }
+
+  var raf = null;
+  function scheduleSync(){
+    if(raf) return;
+    raf = requestAnimationFrame(function(){ raf = null; syncWpListHeight(); });
+  }
+
+  window.addEventListener('resize', scheduleSync);
+  window.addEventListener('load', scheduleSync);
+  document.addEventListener('DOMContentLoaded', scheduleSync);
+
+  var rightCol = document.getElementById('rightCol');
+  if(rightCol){
+    if('ResizeObserver' in window){
+      new ResizeObserver(scheduleSync).observe(rightCol);
+    }
+    if('MutationObserver' in window){
+      new MutationObserver(scheduleSync).observe(rightCol, {
+        childList: true, subtree: true, attributes: true, attributeFilter: ['style','class']
+      });
+    }
+  }
+
+  // Esposta per essere richiamata manualmente da altre parti dell'app
+  // (es. dopo il rendering di un nuovo percorso), se mai servisse.
+  window.syncWpListHeight = scheduleSync;
+
+  scheduleSync();
+})();
+</script>
 
 <!-- ── FIX 5: backdrop per dismiss popup al tap fuori ── -->
 <div id="popup-backdrop" onclick="if(window._closeSnapPopup) window._closeSnapPopup()"></div>
