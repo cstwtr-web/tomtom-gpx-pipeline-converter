@@ -452,9 +452,9 @@ outline: none;
   }
 
   /* Lista tappe: fallback statico (usato solo se JS non è disponibile).
-     L'altezza reale viene ricalcolata dinamicamente da syncWpListHeight()
-     in base allo spazio libero fino al fondo della viewport. */
-  .wp-list { max-height: calc(100dvh - 300px); min-height: 220px; }
+     L'altezza reale viene impostata da syncWpListHeight() misurando le
+     prime 5 righe effettive; qui solo una stima approssimativa. */
+  .wp-list { max-height: 460px; min-height: 220px; }
 }
 
 /* ── Pulsanti Undo / Redo — stile toolbar Word, sempre nella riga principale ── */
@@ -1267,17 +1267,29 @@ Fatto questo, la puoi usare più volte sul tuo navigatore e su quelli di altri, 
 </div>
 <script type="module" src="task_01_main.js"></script>
 
-<!-- ── FIX: altezza dinamica lista tappe su desktop (v24.0) ──────────────
-     Prima: max-height fisso (100dvh - 580px) → su monitor grandi restavano
-     visibili solo ~2 tappe, con spazio vuoto sotto la lista.
-     Ora: la lista si allunga fino al fondo della viewport, ricalcolando
-     lo spazio libero reale ogni volta che cambia (resize finestra,
-     apertura/chiusura pannelli, nuovo percorso elaborato). Il vecchio
-     valore fisso resta solo come fallback CSS se JS non parte.
+<!-- ── FIX: lista tappe fissa a 5 righe visibili su desktop (v25.0) ───────
+     Motivo del cambio rispetto alla v24.0 (altezza dinamica agganciata
+     allo spazio libero in viewport): con percorsi lunghi (10+ tappe) il
+     pulsante "Aggiungi tappa intermedia", che sta SOTTO la lista, poteva
+     diventare irraggiungibile o comunque imprevedibile — più tappe c'erano,
+     più lo spazio disponibile veniva "mangiato" dalla lista stessa, quindi
+     l'utente non aveva un punto di riferimento fisso per capire quanto
+     restava da scorrere prima di trovare il bottone.
+     Ora l'altezza è fissa a 5 righe, sempre uguale indipendentemente da
+     quante tappe ci sono o da quanto è alta la finestra: oltre la quinta
+     riga si scrolla DENTRO la lista, e il bottone "Aggiungi tappa
+     intermedia" resta sempre subito visibile appena sotto, in una
+     posizione costante e prevedibile.
+     L'altezza dei 5 elementi viene misurata dal DOM reale (somma delle
+     .wp-row effettive), non da un valore in px indovinato: resta corretta
+     anche se cambiano font-size responsive (clamp()), spaziatura o
+     contenuto delle righe.
      Su smartphone (<1024px) non fa nulla: la lista mobile usa l'accordion
      esistente (#wpList-wrap.open, max-height:2000px), invariato. -->
 <script>
 (function(){
+  var VISIBLE_ROWS = 5;
+
   function syncWpListHeight(){
     var wpList = document.querySelector('.wp-list');
     if(!wpList) return;
@@ -1285,11 +1297,15 @@ Fatto questo, la puoi usare più volte sul tuo navigatore e su quelli di altri, 
       wpList.style.maxHeight = ''; // torna al comportamento mobile di default
       return;
     }
-    var top = wpList.getBoundingClientRect().top;
-    var bottomMargin = 24; // respiro sotto la lista prima del fondo pagina
-    var minHeight = 220;   // ~ altezza di 4 tappe, mai più piccola di così
-    var available = window.innerHeight - top - bottomMargin;
-    wpList.style.maxHeight = Math.max(minHeight, available) + 'px';
+    var rows = wpList.querySelectorAll('.wp-row');
+    if(!rows.length){
+      wpList.style.maxHeight = ''; // lista vuota: nessun vincolo, usa il fallback CSS
+      return;
+    }
+    var count = Math.min(VISIBLE_ROWS, rows.length);
+    var height = 0;
+    for(var i = 0; i < count; i++) height += rows[i].getBoundingClientRect().height;
+    wpList.style.maxHeight = Math.ceil(height) + 'px';
   }
 
   var raf = null;
@@ -1301,25 +1317,13 @@ Fatto questo, la puoi usare più volte sul tuo navigatore e su quelli di altri, 
   window.addEventListener('resize', scheduleSync);
   window.addEventListener('load', scheduleSync);
   document.addEventListener('DOMContentLoaded', scheduleSync);
-  // FIX: #rightCol è sticky, quindi la posizione a schermo di .wp-list
-  // cambia continuamente durante lo scroll (si "aggancia" più in alto
-  // man mano che si scorre, liberando spazio sotto). Senza questo
-  // listener l'altezza restava congelata al primo calcolo e si
-  // aggiornava solo per caso (es. durante l'animazione di "Centra
-  // mappa", che genera comunque mutazioni sul DOM della mappa) — con
-  // salti di righe che non avevano relazione con l'azione dell'utente.
-  window.addEventListener('scroll', scheduleSync, { passive: true });
 
-  var rightCol = document.getElementById('rightCol');
-  if(rightCol){
-    if('ResizeObserver' in window){
-      new ResizeObserver(scheduleSync).observe(rightCol);
-    }
-    if('MutationObserver' in window){
-      new MutationObserver(scheduleSync).observe(rightCol, {
-        childList: true, subtree: true, attributes: true, attributeFilter: ['style','class']
-      });
-    }
+  // La lista viene ri-renderizzata (righe aggiunte/rimosse/riordinate) ogni
+  // volta che cambiano le tappe: osserviamo il suo contenuto per ricalcolare
+  // l'altezza sulle righe effettivamente presenti in quel momento.
+  var wpListEl = document.getElementById('wpList');
+  if(wpListEl && 'MutationObserver' in window){
+    new MutationObserver(scheduleSync).observe(wpListEl, { childList: true, subtree: true });
   }
 
   // Esposta per essere richiamata manualmente da altre parti dell'app
